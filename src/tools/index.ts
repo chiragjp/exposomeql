@@ -7,7 +7,8 @@ import { formatCellSizeWarning } from "../guardrails/cell-size.js";
 import { checkLOD, isLabBiomarker } from "../guardrails/lod-handling.js";
 import { generateMeanCode, generateConditionalCode } from "../codegen/r-code-generator.js";
 import { NHANES_HHEAR_BRIDGE, BRIDGE_BY_HHEAR, BRIDGE_BY_NHANES } from "../variables/nhanes-hhear-bridge.js";
-import { resolveChemical, COMPTOX_BY_HHEAR } from "../variables/comptox-chemicals.js";
+import { resolveChemical, COMPTOX_BY_HHEAR, THRESHOLDS_BY_NHANES_VAR } from "../variables/comptox-chemicals.js";
+import { resolveChemicalForCTD, CTD_BY_NHANES, CTD_BY_CATEGORY, type CTDChemicalMapping } from "../variables/ctd-chemical-map.js";
 
 /** JSON replacer that converts BigInt to Number */
 function bigintReplacer(_key: string, value: unknown): unknown {
@@ -26,6 +27,116 @@ function formatCandidates(result: ResolveResult): string {
 
 /** Valid series letters for NHANES cycles */
 const VALID_SERIES_LETTERS = new Set(Object.keys(SERIES_MAP));
+
+/** Biological system definitions for phenotype categorization and gene filtering */
+interface SystemDef {
+  name: string;
+  phenotype_patterns: string[];
+  marker_genes: string[];
+}
+
+const BIOLOGICAL_SYSTEMS: SystemDef[] = [
+  {
+    name: "Lipid Metabolism",
+    phenotype_patterns: ["cholesterol", "triglyceride", "hdl", "ldl", "lipid", "lipoprotein", "LBXTC", "LBXTR", "LBDLDL", "LBDHDD"],
+    marker_genes: ["PPARA", "PPARG", "PPARD", "SCD", "FASN", "HMGCR", "LDLR", "APOB", "APOA1", "APOE", "SREBF1", "SREBF2", "ABCA1", "HNF4A", "NR1H3", "NR1H2"],
+  },
+  {
+    name: "Hepatic Function",
+    phenotype_patterns: ["alt", "ast", "ggt", "albumin", "bilirubin", "protein, total", "globulin", "liver", "hepat", "LBXSATSI", "LBXSASSI", "LBXSGTSI", "LBXSAL", "LBXSTB", "LBXSTP", "LBXSGB"],
+    marker_genes: ["ALB", "CYP3A4", "CYP1A2", "CYP2E1", "NR1I2", "AHR", "HNF4A", "HNF1A", "ABCB1", "SLC22A1"],
+  },
+  {
+    name: "Kidney / Uric Acid",
+    phenotype_patterns: ["creatinine", "uric acid", "kidney", "renal", "gfr", "bun", "urea", "LBXSCR", "LBXSUA", "LBXSBU"],
+    marker_genes: ["SLC22A11", "SLC22A12", "ABCG2", "SLC2A9", "UMOD", "HAVCR1", "MT1A", "MT2A", "SOD1", "CAT"],
+  },
+  {
+    name: "Hematology / Iron",
+    phenotype_patterns: ["hemoglobin", "hematocrit", "red blood", "red cell", "mcv", "mch", "rdw", "platelet", "iron", "ferritin", "transferrin", "LBXHGB", "LBXHCT", "LBXRBCSI", "LBXRDW", "LBXMCVSI", "LBXMC", "LBXPLTSI", "LBXSIR"],
+    marker_genes: ["HFE", "TF", "TFRC", "SLC40A1", "EPO", "EPOR", "HBB", "HBA1", "HBA2", "HAMP", "FTH1", "FTL"],
+  },
+  {
+    name: "Immune / Inflammatory",
+    phenotype_patterns: ["white blood", "lymphocyte", "neutrophil", "monocyte", "eosinophil", "basophil", "wbc", "immunoglobulin", "crp", "LBXWBCSI", "LBXLYPCT", "LBXNEPCT", "LBDLYMNO", "LBDNENO", "LBXEOPCT"],
+    marker_genes: ["IL6", "TNF", "IL1B", "IL10", "IL4", "IL2", "IFNG", "NFKB1", "NFKB2", "RELA", "PTGS2", "CXCL8", "CCL2"],
+  },
+  {
+    name: "Thyroid",
+    phenotype_patterns: ["thyroid", "tsh", "t4", "t3", "thyrox", "LBXT4", "LBXTSH"],
+    marker_genes: ["TSHB", "TG", "TPO", "DIO1", "DIO2", "DIO3", "NIS", "SLC5A5", "TSHR", "TTR", "TBG"],
+  },
+  {
+    name: "Glucose / Metabolic",
+    phenotype_patterns: ["glucose", "insulin", "a1c", "glyco", "homa", "diabetes", "LBXGLU", "LBXGH", "LBXIN"],
+    marker_genes: ["INS", "INSR", "IRS1", "SLC2A4", "GCK", "PCK1", "G6PC", "PPARGC1A", "FOXO1", "AKT1", "AKT2"],
+  },
+  {
+    name: "Oxidative Stress / Apoptosis",
+    phenotype_patterns: ["homocysteine", "folate", "vitamin", "LBXHCY", "LBXFOL"],
+    marker_genes: ["SOD1", "SOD2", "CAT", "GPX1", "GPX4", "HMOX1", "NQO1", "NFE2L2", "KEAP1", "CASP3", "CASP9", "BAX", "BCL2", "TP53", "CDKN1A"],
+  },
+  {
+    name: "Body Composition",
+    phenotype_patterns: ["bmi", "fat", "weight", "waist", "DXD", "DXX", "BMXBMI", "BMXWT"],
+    marker_genes: ["LEP", "LEPR", "ADIPOQ", "PPARG", "UCP1", "UCP2", "FTO", "MC4R"],
+  },
+  {
+    name: "Bone",
+    phenotype_patterns: ["bone", "bmd", "bmc", "calcium", "phosph", "alkaline", "DXXOSBMD", "LBXSCA", "LBXSPH"],
+    marker_genes: ["BGLAP", "SPP1", "RUNX2", "TNFSF11", "TNFRSF11B", "VDR", "CYP27B1", "PTH", "PTHLH", "CALCA"],
+  },
+  {
+    name: "Cardiovascular",
+    phenotype_patterns: ["blood pressure", "systolic", "diastolic", "heart", "cardio", "pulse", "BPXSY", "BPXDI"],
+    marker_genes: ["ACE", "AGT", "AGTR1", "NOS3", "EDN1", "EDNRA", "NPPA", "NPPB", "REN"],
+  },
+  {
+    name: "Reproductive / Birth Outcomes",
+    phenotype_patterns: ["birth", "gestation", "pregnan", "fetal", "placent", "fertility", "sperm", "ovul"],
+    marker_genes: ["IGF1", "IGF2", "IGFBP1", "IGFBP3", "VEGFA", "FLT1", "KDR", "PGF", "HIF1A", "EPAS1", "ESR1", "ESR2", "PGR", "CYP19A1", "HSD11B2", "CRH", "MMP2", "MMP9", "PTGS2", "DNMT1", "DNMT3A", "DNMT3B"],
+  },
+  {
+    name: "Neurological",
+    phenotype_patterns: ["cognit", "memory", "brain", "neuro", "depression", "anxiety", "CFDDS", "CFDCCS"],
+    marker_genes: ["BDNF", "NTRK2", "SLC6A3", "SLC6A4", "DRD2", "GRIN1", "GRIN2B", "ACHE", "BCHE", "MAOA", "MAOB", "TH", "GAD1"],
+  },
+];
+
+/** Biological context gene sets for targeted CTD queries */
+const BIOLOGICAL_CONTEXT_GENES: Record<string, string[]> = (() => {
+  const ctx: Record<string, string[]> = {};
+  for (const sys of BIOLOGICAL_SYSTEMS) {
+    ctx[sys.name.toLowerCase()] = sys.marker_genes;
+  }
+  // Additional context aliases
+  ctx["placental"] = BIOLOGICAL_SYSTEMS.find(s => s.name === "Reproductive / Birth Outcomes")!.marker_genes;
+  ctx["birth outcomes"] = ctx["placental"];
+  ctx["pregnancy"] = ctx["placental"];
+  ctx["glucose metabolism"] = BIOLOGICAL_SYSTEMS.find(s => s.name === "Glucose / Metabolic")!.marker_genes;
+  ctx["diabetes"] = ctx["glucose metabolism"];
+  ctx["kidney"] = BIOLOGICAL_SYSTEMS.find(s => s.name === "Kidney / Uric Acid")!.marker_genes;
+  ctx["liver"] = BIOLOGICAL_SYSTEMS.find(s => s.name === "Hepatic Function")!.marker_genes;
+  ctx["immune"] = BIOLOGICAL_SYSTEMS.find(s => s.name === "Immune / Inflammatory")!.marker_genes;
+  ctx["inflammation"] = ctx["immune"];
+  ctx["lipid"] = BIOLOGICAL_SYSTEMS.find(s => s.name === "Lipid Metabolism")!.marker_genes;
+  ctx["cholesterol"] = ctx["lipid"];
+  ctx["thyroid"] = BIOLOGICAL_SYSTEMS.find(s => s.name === "Thyroid")!.marker_genes;
+  ctx["cardiovascular"] = BIOLOGICAL_SYSTEMS.find(s => s.name === "Cardiovascular")!.marker_genes;
+  ctx["heart"] = ctx["cardiovascular"];
+  ctx["blood pressure"] = ctx["cardiovascular"];
+  ctx["hematology"] = BIOLOGICAL_SYSTEMS.find(s => s.name === "Hematology / Iron")!.marker_genes;
+  ctx["iron"] = ctx["hematology"];
+  ctx["oxidative stress"] = BIOLOGICAL_SYSTEMS.find(s => s.name === "Oxidative Stress / Apoptosis")!.marker_genes;
+  ctx["apoptosis"] = ctx["oxidative stress"];
+  ctx["bone"] = BIOLOGICAL_SYSTEMS.find(s => s.name === "Bone")!.marker_genes;
+  ctx["obesity"] = BIOLOGICAL_SYSTEMS.find(s => s.name === "Body Composition")!.marker_genes;
+  ctx["body composition"] = ctx["obesity"];
+  ctx["neurological"] = BIOLOGICAL_SYSTEMS.find(s => s.name === "Neurological")!.marker_genes;
+  ctx["brain"] = ctx["neurological"];
+  ctx["neurodevelopment"] = ctx["neurological"];
+  return ctx;
+})();
 
 /** Map user-facing cycle strings to series letters. Throws on invalid cycles. */
 function mapCyclesToSeries(cycles?: string[]): string[] | undefined {
@@ -2608,7 +2719,1656 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
     }
   );
 
-  console.error(`[exposomeql] Registered 27 tools (6 Class 1, 5 Class 2, 6 Class 3, 9 HHEAR, 1 Chemical)`);
+  // ═══════════════════════════════════════════════════════════════════
+  // CTD (COMPARATIVE TOXICOGENOMICS DATABASE) TOOLS
+  // ═══════════════════════════════════════════════════════════════════
+
+  // ── Tool 28: ctd_chemical_genes ──────────────────────────────────
+  server.tool(
+    "ctd_chemical_genes",
+    "Look up curated gene interactions for a chemical from the Comparative Toxicogenomics Database (CTD). Returns genes that interact with the chemical, interaction types, and PubMed references. Accepts chemical name, NHANES variable code, HHEAR code, or CAS number. Use biological_context to filter to genes relevant to a specific system (e.g., 'birth outcomes', 'glucose metabolism', 'kidney').",
+    {
+      chemical: z
+        .string()
+        .describe(
+          "Chemical identifier: name ('lead'), NHANES code ('LBXBPB'), HHEAR code ('Pb'), or CAS number"
+        ),
+      biological_context: z
+        .string()
+        .optional()
+        .describe(
+          "Filter to genes relevant to a biological context. Options: 'lipid metabolism', 'hepatic function', 'kidney', 'hematology', 'immune', 'thyroid', 'glucose metabolism', 'diabetes', 'oxidative stress', 'body composition', 'bone', 'cardiovascular', 'birth outcomes', 'placental', 'pregnancy', 'neurological', 'neurodevelopment'. If omitted, returns all gene interactions."
+        ),
+      organism: z
+        .string()
+        .optional()
+        .describe(
+          "Filter by organism (e.g., 'Homo sapiens'). Defaults to human only."
+        ),
+      limit: z
+        .number()
+        .optional()
+        .describe(
+          "Maximum number of gene interactions to return (default: 50)"
+        ),
+    },
+    async ({ chemical, biological_context, organism, limit }) => {
+      const mappings = resolveChemicalForCTD(chemical);
+      if (mappings.length === 0) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Chemical "${chemical}" not found in the CTD chemical mapping. Try a chemical name (e.g., 'lead', 'benzene'), NHANES code (e.g., 'LBXBPB'), or CAS number.`,
+          }],
+        };
+      }
+
+      const meshIds = [...new Set(mappings.map((m) => m.mesh_id))];
+      const meshList = meshIds.map((id) => `'${id}'`).join(", ");
+      const orgFilter = organism
+        ? `AND organism = '${organism}'`
+        : "AND organism = 'Homo sapiens'";
+      const maxRows = limit ?? 50;
+
+      // Optional biological context gene filter
+      let geneFilter = "";
+      let contextGenes: string[] | null = null;
+      if (biological_context) {
+        const key = biological_context.toLowerCase();
+        contextGenes = BIOLOGICAL_CONTEXT_GENES[key] ?? null;
+        if (!contextGenes) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Unknown biological context "${biological_context}". Available contexts: ${Object.keys(BIOLOGICAL_CONTEXT_GENES).join(", ")}`,
+            }],
+          };
+        }
+        geneFilter = `AND gene_symbol IN (${contextGenes.map(g => `'${g}'`).join(", ")})`;
+      }
+
+      try {
+        const rows = await ctx.db.query(
+          `SELECT mesh_id, chemical_name, gene_symbol, gene_id, organism,
+                  interaction, interaction_actions, pubmed_ids
+           FROM ctd_chem_gene
+           WHERE mesh_id IN (${meshList}) ${orgFilter} ${geneFilter}
+           ORDER BY gene_symbol
+           LIMIT ${maxRows}`
+        );
+
+        const totalCount = await ctx.db.query(
+          `SELECT count(*) as cnt FROM ctd_chem_gene WHERE mesh_id IN (${meshList}) ${orgFilter} ${geneFilter}`
+        );
+
+        const uniqueGenes = await ctx.db.query(
+          `SELECT count(DISTINCT gene_symbol) as cnt FROM ctd_chem_gene WHERE mesh_id IN (${meshList}) ${orgFilter} ${geneFilter}`
+        );
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              chemical: mappings[0].chemical_name,
+              mesh_ids: meshIds,
+              nhanes_vars: mappings.flatMap((m) => m.nhanes_vars),
+              organism: organism ?? "Homo sapiens",
+              biological_context: biological_context ?? "all",
+              context_genes_queried: contextGenes,
+              total_interactions: Number((totalCount[0] as any)?.cnt ?? 0),
+              unique_genes: Number((uniqueGenes[0] as any)?.cnt ?? 0),
+              showing: Math.min(maxRows, rows.length),
+              interactions: rows,
+              source: "Comparative Toxicogenomics Database (CTD), ctdbase.org",
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `CTD gene interaction query failed: ${(err as Error).message}. Make sure CTD data has been loaded (run: npx tsx scripts/ctd-etl.ts).`,
+          }],
+        };
+      }
+    }
+  );
+
+  // ── Tool 29: ctd_chemical_diseases ───────────────────────────────
+  server.tool(
+    "ctd_chemical_diseases",
+    "Look up disease associations for a chemical from the Comparative Toxicogenomics Database (CTD). Returns curated and inferred chemical-disease associations with evidence type and inference scores. Accepts chemical name, NHANES code, HHEAR code, or CAS number.",
+    {
+      chemical: z
+        .string()
+        .describe(
+          "Chemical identifier: name ('cadmium'), NHANES code ('LBXBCD'), HHEAR code ('Cd'), or CAS number"
+        ),
+      direct_only: z
+        .boolean()
+        .optional()
+        .describe(
+          "If true, return only directly curated associations (not inferred). Default: false."
+        ),
+      disease_filter: z
+        .string()
+        .optional()
+        .describe(
+          "Filter diseases by name substring (e.g., 'kidney', 'cancer', 'diabetes')"
+        ),
+      limit: z
+        .number()
+        .optional()
+        .describe("Maximum number of disease associations to return (default: 50)"),
+    },
+    async ({ chemical, direct_only, disease_filter, limit }) => {
+      const mappings = resolveChemicalForCTD(chemical);
+      if (mappings.length === 0) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Chemical "${chemical}" not found in the CTD chemical mapping.`,
+          }],
+        };
+      }
+
+      const meshIds = [...new Set(mappings.map((m) => m.mesh_id))];
+      const meshList = meshIds.map((id) => `'${id}'`).join(", ");
+      const directFilter = direct_only
+        ? "AND direct_evidence IS NOT NULL AND direct_evidence != ''"
+        : "";
+      const diseaseClause = disease_filter
+        ? `AND LOWER(disease_name) LIKE '%${disease_filter.toLowerCase().replace(/'/g, "''")}%'`
+        : "";
+      const maxRows = limit ?? 50;
+
+      try {
+        // Get direct evidence associations first, then inferred sorted by score
+        const rows = await ctx.db.query(
+          `SELECT mesh_id, chemical_name, disease_name, disease_id,
+                  direct_evidence, inference_gene_symbol, inference_score,
+                  pubmed_ids
+           FROM ctd_chem_disease
+           WHERE mesh_id IN (${meshList}) ${directFilter} ${diseaseClause}
+           ORDER BY
+             CASE WHEN direct_evidence IS NOT NULL AND direct_evidence != '' THEN 0 ELSE 1 END,
+             inference_score DESC NULLS LAST
+           LIMIT ${maxRows}`
+        );
+
+        const totalCount = await ctx.db.query(
+          `SELECT count(*) as cnt,
+                  count(CASE WHEN direct_evidence IS NOT NULL AND direct_evidence != '' THEN 1 END) as direct_cnt
+           FROM ctd_chem_disease
+           WHERE mesh_id IN (${meshList}) ${diseaseClause}`
+        );
+
+        const stats = totalCount[0] as any;
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              chemical: mappings[0].chemical_name,
+              mesh_ids: meshIds,
+              nhanes_vars: mappings.flatMap((m) => m.nhanes_vars),
+              total_associations: Number(stats?.cnt ?? 0),
+              direct_evidence_count: Number(stats?.direct_cnt ?? 0),
+              showing: Math.min(maxRows, rows.length),
+              filter: {
+                direct_only: direct_only ?? false,
+                disease_filter: disease_filter ?? null,
+              },
+              associations: rows,
+              note: "direct_evidence: 'marker/mechanism' = curated from literature; 'therapeutic' = therapeutic association. Rows without direct_evidence are inferred via shared gene interactions (inference_score = network similarity).",
+              source: "Comparative Toxicogenomics Database (CTD), ctdbase.org",
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `CTD disease association query failed: ${(err as Error).message}. Make sure CTD data has been loaded (run: npx tsx scripts/ctd-etl.ts).`,
+          }],
+        };
+      }
+    }
+  );
+
+  // ── Tool 30: ctd_chemical_pathways ───────────────────────────────
+  server.tool(
+    "ctd_chemical_pathways",
+    "Look up enriched biological pathways (KEGG/Reactome) for a chemical from the Comparative Toxicogenomics Database (CTD). Returns pathways that are statistically enriched among genes interacting with the chemical. Accepts chemical name, NHANES code, HHEAR code, or CAS number.",
+    {
+      chemical: z
+        .string()
+        .describe(
+          "Chemical identifier: name ('BPA'), NHANES code ('URXBPH'), HHEAR code ('BPA'), or CAS number"
+        ),
+      significance: z
+        .number()
+        .optional()
+        .describe(
+          "P-value threshold for pathway significance (default: 0.05, uses corrected p-value)"
+        ),
+      limit: z
+        .number()
+        .optional()
+        .describe("Maximum number of pathways to return (default: 50)"),
+    },
+    async ({ chemical, significance, limit }) => {
+      const mappings = resolveChemicalForCTD(chemical);
+      if (mappings.length === 0) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Chemical "${chemical}" not found in the CTD chemical mapping.`,
+          }],
+        };
+      }
+
+      const meshIds = [...new Set(mappings.map((m) => m.mesh_id))];
+      const meshList = meshIds.map((id) => `'${id}'`).join(", ");
+      const pThreshold = significance ?? 0.05;
+      const maxRows = limit ?? 50;
+
+      try {
+        const rows = await ctx.db.query(
+          `SELECT mesh_id, chemical_name, pathway_name, pathway_id,
+                  p_value, corrected_p_value, gene_count, total_genes
+           FROM ctd_chem_pathway
+           WHERE mesh_id IN (${meshList})
+             AND (corrected_p_value <= ${pThreshold} OR corrected_p_value IS NULL)
+           ORDER BY corrected_p_value ASC NULLS LAST, p_value ASC NULLS LAST
+           LIMIT ${maxRows}`
+        );
+
+        const totalCount = await ctx.db.query(
+          `SELECT count(*) as cnt FROM ctd_chem_pathway WHERE mesh_id IN (${meshList})`
+        );
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              chemical: mappings[0].chemical_name,
+              mesh_ids: meshIds,
+              nhanes_vars: mappings.flatMap((m) => m.nhanes_vars),
+              total_pathways: Number((totalCount[0] as any)?.cnt ?? 0),
+              significant_at: pThreshold,
+              showing: Math.min(maxRows, rows.length),
+              pathways: rows,
+              note: "Pathways are statistically enriched among genes that interact with this chemical (hypergeometric test, Bonferroni-corrected).",
+              source: "Comparative Toxicogenomics Database (CTD), ctdbase.org",
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `CTD pathway query failed: ${(err as Error).message}. Make sure CTD data has been loaded (run: npx tsx scripts/ctd-etl.ts).`,
+          }],
+        };
+      }
+    }
+  );
+
+  // ── Tool 31: ctd_chemical_go ─────────────────────────────────────
+  server.tool(
+    "ctd_chemical_go",
+    "Look up enriched Gene Ontology (GO) terms for a chemical from the Comparative Toxicogenomics Database (CTD). Returns biological processes, molecular functions, and cellular components enriched among genes interacting with the chemical. Accepts chemical name, NHANES code, HHEAR code, or CAS number.",
+    {
+      chemical: z
+        .string()
+        .describe(
+          "Chemical identifier: name ('mercury'), NHANES code ('LBXTHG'), HHEAR code ('Hg'), or CAS number"
+        ),
+      ontology: z
+        .enum(["Biological Process", "Molecular Function", "Cellular Component"])
+        .optional()
+        .describe(
+          "Filter by GO ontology domain. Omit for all domains."
+        ),
+      significance: z
+        .number()
+        .optional()
+        .describe("P-value threshold (default: 0.01, uses corrected p-value)"),
+      limit: z
+        .number()
+        .optional()
+        .describe("Maximum number of GO terms to return (default: 50)"),
+    },
+    async ({ chemical, ontology, significance, limit }) => {
+      const mappings = resolveChemicalForCTD(chemical);
+      if (mappings.length === 0) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Chemical "${chemical}" not found in the CTD chemical mapping.`,
+          }],
+        };
+      }
+
+      const meshIds = [...new Set(mappings.map((m) => m.mesh_id))];
+      const meshList = meshIds.map((id) => `'${id}'`).join(", ");
+      const pThreshold = significance ?? 0.01;
+      const ontologyFilter = ontology
+        ? `AND ontology = '${ontology}'`
+        : "";
+      const maxRows = limit ?? 50;
+
+      try {
+        const rows = await ctx.db.query(
+          `SELECT mesh_id, chemical_name, go_name, go_id, ontology,
+                  p_value, corrected_p_value, gene_count, total_genes
+           FROM ctd_chem_go
+           WHERE mesh_id IN (${meshList})
+             AND (corrected_p_value <= ${pThreshold} OR corrected_p_value IS NULL)
+             ${ontologyFilter}
+           ORDER BY corrected_p_value ASC NULLS LAST, p_value ASC NULLS LAST
+           LIMIT ${maxRows}`
+        );
+
+        // Count by ontology domain
+        const domainCounts = await ctx.db.query(
+          `SELECT ontology, count(*) as cnt
+           FROM ctd_chem_go
+           WHERE mesh_id IN (${meshList})
+           GROUP BY ontology`
+        );
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              chemical: mappings[0].chemical_name,
+              mesh_ids: meshIds,
+              nhanes_vars: mappings.flatMap((m) => m.nhanes_vars),
+              go_terms_by_domain: domainCounts,
+              significant_at: pThreshold,
+              ontology_filter: ontology ?? "all",
+              showing: Math.min(maxRows, rows.length),
+              go_terms: rows,
+              note: "GO terms enriched among genes interacting with this chemical (hypergeometric test, Bonferroni-corrected).",
+              source: "Comparative Toxicogenomics Database (CTD), ctdbase.org",
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `CTD GO enrichment query failed: ${(err as Error).message}. Make sure CTD data has been loaded (run: npx tsx scripts/ctd-etl.ts).`,
+          }],
+        };
+      }
+    }
+  );
+
+  // ── Tool 32: ctd_triangulate ─────────────────────────────────────
+  server.tool(
+    "ctd_triangulate",
+    "Triangulate an exposure-health association by combining three independent lines of evidence: (1) NHANES EP-WAS — population-level associations from 66M pre-computed meta-analyses, (2) HHEAR cohorts — exposure levels and demographics from 35+ global studies, and (3) CTD — curated gene interactions, disease associations, and enriched pathways. Returns directional hypotheses linking exposure → gene mechanism → phenotype. This is the key interpretability tool for ExWAS results.",
+    {
+      exposure: z
+        .string()
+        .describe(
+          "Exposure chemical: name ('cadmium'), NHANES code ('LBXBCD'), or HHEAR code ('Cd')"
+        ),
+      disease: z
+        .string()
+        .optional()
+        .describe(
+          "Optional disease/phenotype filter (e.g., 'kidney disease', 'diabetes'). If omitted, returns the full ExWAS profile with all significant phenotype associations."
+        ),
+      top_n: z
+        .number()
+        .optional()
+        .describe("Number of top results to return per category (default: 15)"),
+    },
+    async ({ exposure, disease, top_n }) => {
+      const mappings = resolveChemicalForCTD(exposure);
+      if (mappings.length === 0) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Chemical "${exposure}" not found in the CTD chemical mapping.`,
+          }],
+        };
+      }
+
+      const meshIds = [...new Set(mappings.map((m) => m.mesh_id))];
+      const meshList = meshIds.map((id) => `'${id}'`).join(", ");
+      const n = top_n ?? 15;
+      const chemName = mappings[0].chemical_name;
+      const nhanesVars = mappings.flatMap((m) => m.nhanes_vars);
+
+      const results: Record<string, unknown> = {
+        exposure: chemName,
+        mesh_ids: meshIds,
+        nhanes_vars: nhanesVars,
+        hhear_codes: mappings.filter((m) => m.hhear_code).map((m) => m.hhear_code),
+        disease_query: disease ?? "all (full ExWAS profile)",
+      };
+
+      // Uses module-level BIOLOGICAL_SYSTEMS for phenotype categorization
+
+      // ── 1. EP-WAS: Significant phenotype associations (meta-analysis) ──
+      interface EpwasRow {
+        pvarname: string;
+        desc: string;
+        estimate: number;
+        se: number;
+        p_value: number;
+        i_squared: number | null;
+        k: number;
+      }
+
+      let epwasAssociations: EpwasRow[] = [];
+      try {
+        if (nhanesVars.length > 0) {
+          const varList = nhanesVars.map((v) => `'${v}'`).join(", ");
+          const diseaseFilter = disease
+            ? `AND (LOWER(vn.desc) LIKE '%${disease.toLowerCase().replace(/'/g, "''")}%' OR LOWER(am.pvarname) LIKE '%${disease.toLowerCase().replace(/'/g, "''")}%')`
+            : "";
+
+          epwasAssociations = await ctx.db.query<EpwasRow>(
+            `SELECT
+               am.pvarname,
+               vn.desc,
+               am.estimate,
+               am."std.error" as se,
+               am."p.value" as p_value,
+               am."i.squared" as i_squared,
+               am.nobs as k
+             FROM pe_stats.adjusted_meta am
+             LEFT JOIN (
+               SELECT "Variable.Name" as vname, MIN("Variable.Description") as desc
+               FROM pe_stats.variable_names_epcf
+               GROUP BY "Variable.Name"
+             ) vn ON am.pvarname = vn.vname
+             WHERE am.evarname IN (${varList})
+               AND am.model_number = 2
+               AND am.expo_name = 'overall'
+               AND am."p.value" < 0.05
+               ${diseaseFilter}
+             ORDER BY am."p.value" ASC
+             LIMIT 50`
+          );
+        }
+      } catch {
+        // EP-WAS database may not be attached
+      }
+
+      // ── Categorize EP-WAS results by biological system ──
+      interface CategorizedAssoc {
+        system: string;
+        phenotype: string;
+        description: string;
+        beta: number;
+        direction: string;
+        se: number;
+        p_value: number;
+        i_squared: number | null;
+        n_cycles: number;
+      }
+
+      const categorized: CategorizedAssoc[] = [];
+      const uncategorized: CategorizedAssoc[] = [];
+
+      for (const row of epwasAssociations) {
+        const desc = (row.desc || row.pvarname).toLowerCase();
+        const varName = row.pvarname.toUpperCase();
+        const direction = row.estimate > 0 ? "↑" : "↓";
+        const entry: CategorizedAssoc = {
+          system: "Other",
+          phenotype: row.pvarname,
+          description: row.desc || row.pvarname,
+          beta: Math.round(row.estimate * 10000) / 10000,
+          direction,
+          se: Math.round(row.se * 10000) / 10000,
+          p_value: row.p_value,
+          i_squared: row.i_squared != null ? Math.round(row.i_squared * 10) / 10 : null,
+          n_cycles: row.k,
+        };
+
+        let matched = false;
+        for (const sys of BIOLOGICAL_SYSTEMS) {
+          if (sys.phenotype_patterns.some((p) =>
+            p.startsWith("LBX") || p.startsWith("DX") || p.startsWith("BM") || p.startsWith("BP")
+              ? varName.includes(p)
+              : desc.includes(p.toLowerCase())
+          )) {
+            entry.system = sys.name;
+            categorized.push(entry);
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) {
+          uncategorized.push(entry);
+        }
+      }
+
+      // Group by system
+      const epwasBySys: Record<string, CategorizedAssoc[]> = {};
+      for (const a of categorized) {
+        if (!epwasBySys[a.system]) epwasBySys[a.system] = [];
+        epwasBySys[a.system].push(a);
+      }
+
+      results.epwas_by_system = epwasBySys;
+      results.epwas_other = uncategorized.length > 0 ? uncategorized : undefined;
+      results.epwas_total_significant = epwasAssociations.length;
+
+      // ── 2. HHEAR cohort evidence ──
+      // Find all HHEAR cohorts that measured this chemical and pull summary statistics
+      interface HhearCohortEvidence {
+        cohort_id: string;
+        study_name?: string;
+        country?: string;
+        population?: string;
+        n_participants: number;
+        hhear_code: string;
+        n_measured: number;
+        mean: number | null;
+        geometric_mean: number | null;
+        median: number | null;
+        p25: number | null;
+        p75: number | null;
+        pct_below_lod: number | null;
+        units: string | null;
+      }
+
+      const hhearEvidence: HhearCohortEvidence[] = [];
+      const hhearCodes = mappings.filter((m) => m.hhear_code).map((m) => m.hhear_code!);
+
+      if (hhearCodes.length > 0 && ctx.cohorts.length > 0) {
+        for (const cohortConfig of ctx.cohorts) {
+          // Check if any HHEAR code for this chemical is measured in this cohort
+          const matchedCode = hhearCodes.find((hc) =>
+            cohortConfig.analytes.some((a) => a.toLowerCase() === hc.toLowerCase())
+          );
+          if (!matchedCode) continue;
+
+          // Query basic descriptive stats from the targeted data via DuckDB
+          const tableName = `cohort_${cohortConfig.id}_targeted`;
+          try {
+            const stats = await ctx.db.query<{
+              n: number | bigint;
+              mean_val: number | null;
+              median_val: number | null;
+              p25: number | null;
+              p75: number | null;
+              pct_lod: number | null;
+              units: string | null;
+            }>(`
+              SELECT
+                COUNT(*) as n,
+                AVG(CASE WHEN conc > 0 THEN conc END) as mean_val,
+                MEDIAN(conc) as median_val,
+                QUANTILE_CONT(conc, 0.25) as p25,
+                QUANTILE_CONT(conc, 0.75) as p75,
+                100.0 * SUM(CASE WHEN LOWER(CAST(Comment_Code AS VARCHAR)) IN ('below lod', '<lod') OR conc <= 0 OR conc IS NULL THEN 1 ELSE 0 END) / COUNT(*) as pct_lod,
+                MIN(CAST(Units AS VARCHAR)) as units
+              FROM (
+                SELECT *, TRY_CAST(Concentration AS DOUBLE) as conc
+                FROM ${tableName}
+                WHERE LOWER(CAST(Analyte_Code AS VARCHAR)) = LOWER('${matchedCode}')
+              ) sub
+              WHERE conc IS NOT NULL
+            `);
+
+            if (stats.length > 0 && Number(stats[0].n) > 0) {
+              const s = stats[0];
+              const meanVal = s.mean_val;
+              // Geometric mean: exp(mean(log(x))) for positive values
+              let geoMean: number | null = null;
+              try {
+                const gm = await ctx.db.query<{ gm: number | null }>(`
+                  SELECT EXP(AVG(LN(TRY_CAST(Concentration AS DOUBLE)))) as gm
+                  FROM ${tableName}
+                  WHERE LOWER(CAST(Analyte_Code AS VARCHAR)) = LOWER('${matchedCode}')
+                    AND TRY_CAST(Concentration AS DOUBLE) > 0
+                `);
+                geoMean = gm[0]?.gm ?? null;
+              } catch { /* OK */ }
+
+              hhearEvidence.push({
+                cohort_id: cohortConfig.id,
+                study_name: cohortConfig.studyName,
+                country: cohortConfig.country,
+                population: cohortConfig.populationNote,
+                n_participants: cohortConfig.nParticipants,
+                hhear_code: matchedCode,
+                n_measured: Number(s.n),
+                mean: meanVal != null ? Math.round(meanVal * 1000) / 1000 : null,
+                geometric_mean: geoMean != null ? Math.round(geoMean * 1000) / 1000 : null,
+                median: s.median_val != null ? Math.round(Number(s.median_val) * 1000) / 1000 : null,
+                p25: s.p25 != null ? Math.round(Number(s.p25) * 1000) / 1000 : null,
+                p75: s.p75 != null ? Math.round(Number(s.p75) * 1000) / 1000 : null,
+                pct_below_lod: s.pct_lod != null ? Math.round(Number(s.pct_lod) * 10) / 10 : null,
+                units: s.units,
+              });
+            }
+          } catch {
+            // Cohort table not loaded or query failed — skip
+          }
+        }
+      }
+
+      if (hhearEvidence.length > 0) {
+        results.hhear_cohort_evidence = {
+          n_cohorts: hhearEvidence.length,
+          hhear_codes: hhearCodes,
+          cohorts: hhearEvidence,
+          note: "Exposure levels from HHEAR consortium cohorts. These are independent from NHANES and provide cross-cohort replication context.",
+        };
+      } else {
+        results.hhear_cohort_evidence = {
+          n_cohorts: 0,
+          hhear_codes: hhearCodes,
+          note: hhearCodes.length > 0
+            ? "No HHEAR cohorts currently loaded with this chemical."
+            : "No HHEAR analyte code mapped for this chemical.",
+        };
+      }
+
+      // ── 3. CTD gene interactions by biological system ──
+      // For each system that has EP-WAS hits, query CTD for relevant gene interactions
+      interface GeneInteraction {
+        gene_symbol: string;
+        interaction_count: number;
+        interactions: string[];
+        action_summary: string;
+      }
+
+      const geneBySys: Record<string, GeneInteraction[]> = {};
+
+      const systemsWithHits = disease
+        ? BIOLOGICAL_SYSTEMS
+        : BIOLOGICAL_SYSTEMS.filter((s) => epwasBySys[s.name]);
+
+      for (const sys of systemsWithHits) {
+        if (sys.marker_genes.length === 0) continue;
+        const geneList = sys.marker_genes.map((g) => `'${g}'`).join(", ");
+        try {
+          const geneRows = await ctx.db.query<{
+            gene_symbol: string;
+            n: number | bigint;
+            interactions: string;
+            actions: string;
+          }>(
+            `SELECT gene_symbol,
+                    count(*) as n,
+                    STRING_AGG(DISTINCT interaction, ' || ') as interactions,
+                    STRING_AGG(DISTINCT interaction_actions, ' | ') as actions
+             FROM ctd_chem_gene
+             WHERE mesh_id IN (${meshList})
+               AND organism = 'Homo sapiens'
+               AND gene_symbol IN (${geneList})
+             GROUP BY gene_symbol
+             ORDER BY count(*) DESC`
+          );
+          if (geneRows.length > 0) {
+            geneBySys[sys.name] = geneRows.map((r) => ({
+              gene_symbol: r.gene_symbol,
+              interaction_count: Number(r.n),
+              interactions: (r.interactions || "").split(" || ").slice(0, 5),
+              action_summary: r.actions || "",
+            }));
+          }
+        } catch {
+          // CTD not loaded
+        }
+      }
+
+      results.ctd_gene_by_system = geneBySys;
+
+      // ── 3. Generate directional hypotheses ──
+      const hypotheses: string[] = [];
+
+      for (const sys of BIOLOGICAL_SYSTEMS) {
+        const epwasHits = epwasBySys[sys.name];
+        const geneHits = geneBySys[sys.name];
+        if (!epwasHits && !geneHits) continue;
+
+        // Build phenotype summary
+        const phenoSummary = epwasHits
+          ? epwasHits
+              .slice(0, 4)
+              .map((a) => `${a.direction}${a.description} (β=${a.beta})`)
+              .join(", ")
+          : "(no significant EP-WAS associations)";
+
+        // Build gene mechanism summary
+        let mechSummary = "";
+        if (geneHits && geneHits.length > 0) {
+          const geneDetails = geneHits.slice(0, 4).map((g) => {
+            // Extract directionality from interactions
+            const dirs: string[] = [];
+            for (const ix of g.interactions) {
+              if (ix.includes("increases")) dirs.push("↑");
+              if (ix.includes("decreases")) dirs.push("↓");
+              if (ix.includes("binds to")) dirs.push("binds");
+              if (ix.includes("inhibits")) dirs.push("inhibits");
+            }
+            const dirStr = [...new Set(dirs)].join("/");
+            return `${chemName} ${dirStr} ${g.gene_symbol} (${g.interaction_count} interactions)`;
+          });
+          mechSummary = geneDetails.join("; ");
+        }
+
+        if (epwasHits || geneHits) {
+          let hypothesis = `**${sys.name}**: `;
+          if (mechSummary) {
+            hypothesis += `${mechSummary}`;
+          }
+          if (epwasHits && epwasHits.length > 0) {
+            hypothesis += ` → Population-level: ${phenoSummary}`;
+          }
+          hypotheses.push(hypothesis);
+        }
+      }
+
+      results.directional_hypotheses = hypotheses;
+
+      // ── 4. CTD disease associations ──
+      const diseaseLower = disease ? disease.toLowerCase().replace(/'/g, "''") : "";
+      try {
+        const diseaseFilter = disease
+          ? `AND LOWER(disease_name) LIKE '%${diseaseLower}%'`
+          : "";
+        const diseaseRows = await ctx.db.query(
+          `SELECT disease_name, disease_id, direct_evidence,
+                  inference_gene_symbol, inference_score, pubmed_ids
+           FROM ctd_chem_disease
+           WHERE mesh_id IN (${meshList})
+             ${diseaseFilter}
+             AND (direct_evidence IS NOT NULL AND direct_evidence != '')
+           ORDER BY
+             LENGTH(pubmed_ids) - LENGTH(REPLACE(pubmed_ids, '|', '')) DESC
+           LIMIT ${n}`
+        );
+        results.ctd_direct_disease_evidence = {
+          count: diseaseRows.length,
+          associations: diseaseRows,
+          note: "Directly curated disease associations from published literature (marker/mechanism or therapeutic).",
+        };
+      } catch {
+        results.ctd_direct_disease_evidence = { count: 0, note: "CTD disease data not loaded" };
+      }
+
+      // ── 5. Top enriched pathways ──
+      try {
+        const pathwayRows = await ctx.db.query(
+          `SELECT pathway_name, pathway_id, corrected_p_value, gene_count
+           FROM ctd_chem_pathway
+           WHERE mesh_id IN (${meshList})
+             AND corrected_p_value IS NOT NULL
+           ORDER BY corrected_p_value ASC
+           LIMIT ${n}`
+        );
+        results.ctd_pathways = {
+          count: pathwayRows.length,
+          top_pathways: pathwayRows,
+        };
+      } catch {
+        results.ctd_pathways = { count: 0, note: "CTD pathway data not loaded" };
+      }
+
+      // ── 6. Total gene interaction count ──
+      try {
+        const totalGenes = await ctx.db.query<{ cnt: number | bigint }>(
+          `SELECT count(DISTINCT gene_symbol) as cnt
+           FROM ctd_chem_gene
+           WHERE mesh_id IN (${meshList}) AND organism = 'Homo sapiens'`
+        );
+        results.total_human_gene_interactions = Number(totalGenes[0]?.cnt ?? 0);
+      } catch {
+        results.total_human_gene_interactions = 0;
+      }
+
+      const hhearSummary = hhearEvidence.length > 0
+        ? `3. COHORT (HHEAR): Exposure levels from ${hhearEvidence.length} independent cohort(s) in the HHEAR consortium, providing cross-population replication and exposure characterization.`
+        : "3. COHORT (HHEAR): No HHEAR cohorts available for this chemical.";
+
+      results.interpretation = [
+        `TRIANGULATION SUMMARY for ${chemName}${disease ? ` × ${disease}` : ""}:`,
+        "",
+        "This analysis combines three independent lines of evidence:",
+        `1. EPIDEMIOLOGICAL (EP-WAS): ${epwasAssociations.length} significant phenotype associations from survey-weighted NHANES analysis (fully adjusted model: age + age² + sex + ethnicity + income + education), meta-analyzed across available cycles.`,
+        hhearSummary,
+        `2. MECHANISTIC (CTD): Curated gene interactions, disease associations, and pathway enrichment from published literature in the Comparative Toxicogenomics Database.`,
+        "",
+        "The directional_hypotheses field links these evidence streams: CTD gene interactions (with directionality: increases/decreases expression, binds, inhibits) are mapped to EP-WAS phenotype categories to generate mechanistic hypotheses explaining population-level associations.",
+        "",
+        "Convergence across all three lines of evidence — population associations (NHANES), independent cohort measurements (HHEAR), and molecular mechanisms (CTD) — strengthens the case for a causal relationship. Divergence suggests confounding, reverse causation, or incomplete mechanistic understanding.",
+      ].join("\n");
+      results.source = "EP-WAS: Patel lab NHANES meta-analyses (adjusted_meta, model 2); HHEAR: Human Health Exposure Analysis Resource consortium; CTD: Comparative Toxicogenomics Database (ctdbase.org)";
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify(results, bigintReplacer, 2),
+        }],
+      };
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CROSS-CUTTING TOOLS
+  // ═══════════════════════════════════════════════════════════════════
+
+  // ── Tool 33: cohort_chemical_availability ──────────────────────────
+  server.tool(
+    "cohort_chemical_availability",
+    "Find which HHEAR cohorts measured a given chemical. Returns cohort metadata (study name, country, population, PI), sample sizes, and summary statistics (mean, median, %<LOD) for each cohort. Use this before running cohort-specific analyses to know what data is available.",
+    {
+      chemical: z
+        .string()
+        .describe("Chemical name ('arsenic'), HHEAR code ('As'), NHANES code ('LBXBPB'), or CAS number"),
+    },
+    async ({ chemical }) => {
+      // Resolve to HHEAR codes
+      const ctdMappings = resolveChemicalForCTD(chemical);
+      const hhearCodes = ctdMappings.filter((m) => m.hhear_code).map((m) => m.hhear_code!);
+
+      // Also try direct HHEAR alias resolution
+      const aliasResult = ctx.resolver.resolveHhear(chemical);
+      if (aliasResult.resolved && aliasResult.analyteCode) {
+        const code = aliasResult.analyteCode;
+        if (!hhearCodes.some((h) => h.toLowerCase() === code.toLowerCase())) {
+          hhearCodes.push(code);
+        }
+      }
+
+      if (hhearCodes.length === 0) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Could not resolve "${chemical}" to an HHEAR analyte code. Try a chemical name (e.g., 'lead', 'BPA'), HHEAR code (e.g., 'Pb'), or NHANES code (e.g., 'LBXBPB').`,
+          }],
+        };
+      }
+
+      interface CohortAvailability {
+        cohort_id: string;
+        study_name?: string;
+        country?: string;
+        population?: string;
+        pi?: string;
+        n_participants: number;
+        hhear_code: string;
+        n_measured: number;
+        mean: number | null;
+        geometric_mean: number | null;
+        median: number | null;
+        p25: number | null;
+        p75: number | null;
+        pct_below_lod: number | null;
+        units: string | null;
+        has_epi_data: boolean;
+        epi_variables: string[];
+      }
+
+      const available: CohortAvailability[] = [];
+
+      for (const cohortConfig of ctx.cohorts) {
+        const matchedCode = hhearCodes.find((hc) =>
+          cohortConfig.analytes.some((a) => a.toLowerCase() === hc.toLowerCase())
+        );
+        if (!matchedCode) continue;
+
+        const tableName = `cohort_${cohortConfig.id}_targeted`;
+        try {
+          const stats = await ctx.db.query<{
+            n: number | bigint;
+            mean_val: number | null;
+            median_val: number | null;
+            p25: number | null;
+            p75: number | null;
+            pct_lod: number | null;
+            units: string | null;
+          }>(`
+            SELECT
+              COUNT(*) as n,
+              AVG(CASE WHEN conc > 0 THEN conc END) as mean_val,
+              MEDIAN(conc) as median_val,
+              QUANTILE_CONT(conc, 0.25) as p25,
+              QUANTILE_CONT(conc, 0.75) as p75,
+              100.0 * SUM(CASE WHEN LOWER(CAST(Comment_Code AS VARCHAR)) IN ('below lod', '<lod') OR conc <= 0 OR conc IS NULL THEN 1 ELSE 0 END) / COUNT(*) as pct_lod,
+              MIN(CAST(Units AS VARCHAR)) as units
+            FROM (
+              SELECT *, TRY_CAST(Concentration AS DOUBLE) as conc, Analyte_Code, Comment_Code, Units
+              FROM ${tableName}
+              WHERE LOWER(CAST(Analyte_Code AS VARCHAR)) = LOWER('${matchedCode}')
+            ) sub
+            WHERE conc IS NOT NULL
+          `);
+
+          if (stats.length > 0 && Number(stats[0].n) > 0) {
+            const s = stats[0];
+            let geoMean: number | null = null;
+            try {
+              const gm = await ctx.db.query<{ gm: number | null }>(`
+                SELECT EXP(AVG(LN(TRY_CAST(Concentration AS DOUBLE)))) as gm FROM ${tableName}
+                WHERE LOWER(CAST(Analyte_Code AS VARCHAR)) = LOWER('${matchedCode}') AND TRY_CAST(Concentration AS DOUBLE) > 0
+              `);
+              geoMean = gm[0]?.gm ?? null;
+            } catch { /* OK */ }
+
+            // Get epi column names
+            const epiVars: string[] = [];
+            if (cohortConfig.epiColumnMap) {
+              for (const [stdName] of Object.entries(cohortConfig.epiColumnMap)) {
+                if (stdName) epiVars.push(stdName);
+              }
+            }
+
+            available.push({
+              cohort_id: cohortConfig.id,
+              study_name: cohortConfig.studyName,
+              country: cohortConfig.country,
+              population: cohortConfig.populationNote,
+              pi: cohortConfig.pi,
+              n_participants: cohortConfig.nParticipants,
+              hhear_code: matchedCode,
+              n_measured: Number(s.n),
+              mean: s.mean_val != null ? Math.round(Number(s.mean_val) * 1000) / 1000 : null,
+              geometric_mean: geoMean != null ? Math.round(geoMean * 1000) / 1000 : null,
+              median: s.median_val != null ? Math.round(Number(s.median_val) * 1000) / 1000 : null,
+              p25: s.p25 != null ? Math.round(Number(s.p25) * 1000) / 1000 : null,
+              p75: s.p75 != null ? Math.round(Number(s.p75) * 1000) / 1000 : null,
+              pct_below_lod: s.pct_lod != null ? Math.round(Number(s.pct_lod) * 10) / 10 : null,
+              units: s.units,
+              has_epi_data: !!cohortConfig.epiDataFile,
+              epi_variables: epiVars,
+            });
+          }
+        } catch { /* cohort query failed — column mismatch or data issue */ }
+      }
+
+      // Also check NHANES bridge
+      const nhanesVars = ctdMappings.flatMap((m) => m.nhanes_vars);
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            chemical: ctdMappings[0]?.chemical_name ?? chemical,
+            hhear_codes: hhearCodes,
+            nhanes_codes: nhanesVars,
+            n_cohorts_available: available.length,
+            n_cohorts_total: ctx.cohorts.length,
+            cohorts: available,
+            note: available.length > 0
+              ? "Use cohort_mean, cohort_outcome_associations, or cohort_exwas for detailed analysis."
+              : "No HHEAR cohorts have this chemical in their targeted data.",
+          }, bigintReplacer, 2),
+        }],
+      };
+    }
+  );
+
+  // ── Tool 34: cohort_outcome_associations ───────────────────────────
+  server.tool(
+    "cohort_outcome_associations",
+    "Run a phenotype-wide association study for a single exposure in an HHEAR cohort. Tests one exposure against ALL available outcomes in the epi data (e.g., birth weight, gestational age, BMI, cognitive scores). Returns ranked associations with BH-FDR correction. Model: outcome ~ ln(exposure) + covariates.",
+    {
+      cohort: z.string().describe("Cohort ID"),
+      exposure: z
+        .string()
+        .describe("Exposure analyte code or name (e.g., 'As', 'lead', 'BPA')"),
+      creatinine_adjust: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("Adjust urinary exposure by creatinine (default: false)"),
+      covariates: z
+        .array(z.string())
+        .optional()
+        .describe("Covariate epi columns to include (default: ['age', 'sex'] if available)"),
+    },
+    async ({ cohort, exposure, creatinine_adjust, covariates }) => {
+      const cohortConfig = findCohort(ctx, cohort);
+      if (!cohortConfig) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Cohort "${cohort}" not found. Available: ${ctx.cohorts.map((c) => c.id).join(", ")}`,
+          }],
+        };
+      }
+
+      // Resolve analyte
+      const resolved = resolveAnalyte(ctx, exposure, cohortConfig);
+      if ("error" in resolved) {
+        return { content: [{ type: "text" as const, text: resolved.error }] };
+      }
+
+      if (!cohortConfig.epiDataFile) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Cohort ${cohort} has no epidemiological data file. Cannot test outcome associations without epi variables.`,
+          }],
+        };
+      }
+
+      try {
+        const rResult = await ctx.rExec.execute(
+          "cohort_outcome_associations.R",
+          {
+            targeted_csv: cohortConfig.targetedLongCsv ?? path.join(cohortConfig.dataDir, cohortConfig.targetedDataFile),
+            epi_csv: path.join(cohortConfig.dataDir, cohortConfig.epiDataFile),
+            analyte_code: resolved.code,
+            creatinine_adjust: creatinine_adjust ?? false,
+            age_column: cohortConfig.epiColumnMap?.age?.column ?? null,
+            sex_column: cohortConfig.epiColumnMap?.sex?.column ?? null,
+            age_transform: cohortConfig.epiColumnMap?.age?.transform ?? null,
+            covariates: covariates ?? null,
+            wide_format: cohortConfig.wideFormat ?? false,
+            pid_column: cohortConfig.pidColumn,
+          },
+          300000 // 5 minute timeout
+        );
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              cohort: cohortConfig.id,
+              study_name: cohortConfig.studyName,
+              exposure: resolved.code,
+              exposure_name: resolved.name,
+              ...rResult,
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Error running outcome associations for ${resolved.code} in cohort ${cohort}: ${(err as Error).message}`,
+          }],
+        };
+      }
+    }
+  );
+
+  // ── Tool 35: epwas_reverse_triangulate ─────────────────────────────
+  server.tool(
+    "epwas_reverse_triangulate",
+    "Reverse triangulation: start from a phenotype (e.g., 'HbA1c', 'birth weight', 'blood pressure') and find which environmental exposures are associated with it. For each chemical exposure hit, pulls CTD gene mechanisms and HHEAR cohort availability. Returns a ranked table of exposures with mechanistic evidence, enabling phenotype-first ExWAS interpretation.",
+    {
+      phenotype: z
+        .string()
+        .describe("Phenotype variable or name (e.g., 'glycohemoglobin', 'LBXGH', 'fasting glucose', 'LBXGLU')"),
+      model_number: z
+        .number()
+        .optional()
+        .default(2)
+        .describe("EP-WAS adjustment model (2=fully adjusted [default], 6=age+sex+ethnicity)"),
+      p_threshold: z
+        .number()
+        .optional()
+        .default(1e-5)
+        .describe("P-value threshold for EP-WAS hits (default: 1e-5)"),
+      top_n: z
+        .number()
+        .optional()
+        .default(20)
+        .describe("Maximum number of top exposure hits to triangulate (default: 20)"),
+    },
+    async ({ phenotype, model_number, p_threshold, top_n }) => {
+      // Resolve phenotype
+      const r = await ctx.resolver.resolve(phenotype);
+      if (!r.resolved) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: r.candidates
+              ? `Ambiguous phenotype "${phenotype}". Candidates:\n${formatCandidates(r)}`
+              : `Phenotype "${phenotype}" not found.`,
+          }],
+        };
+      }
+
+      const phenoVar = r.variable!.variableName;
+      const phenoDesc = r.variable!.description;
+      const model = model_number ?? 2;
+      const pThresh = p_threshold ?? 1e-5;
+      const maxN = top_n ?? 20;
+
+      // 1. Query EP-WAS for top exposures associated with this phenotype
+      interface EpwasHit {
+        evarname: string;
+        estimate: number;
+        se: number;
+        p_value: number;
+        i_squared: number | null;
+        k: number;
+        desc: string;
+      }
+
+      let epwasHits: EpwasHit[] = [];
+      try {
+        epwasHits = await ctx.db.query<EpwasHit>(
+          `SELECT
+             am.evarname,
+             am.estimate,
+             am."std.error" as se,
+             am."p.value" as p_value,
+             am."i.squared" as i_squared,
+             am.nobs as k,
+             COALESCE(vn.desc, am.evarname) as desc
+           FROM pe_stats.adjusted_meta am
+           LEFT JOIN (
+             SELECT "Variable.Name" as vname, MIN("Variable.Description") as desc
+             FROM pe_stats.variable_names_epcf
+             GROUP BY "Variable.Name"
+           ) vn ON am.evarname = vn.vname
+           WHERE am.pvarname = '${phenoVar}'
+             AND am.model_number = ${model}
+             AND am.expo_name = 'overall'
+             AND am."p.value" < ${pThresh}
+           ORDER BY am."p.value" ASC
+           LIMIT ${maxN * 2}`
+        );
+      } catch (err) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `EP-WAS query failed: ${(err as Error).message}`,
+          }],
+        };
+      }
+
+      if (epwasHits.length === 0) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `No significant exposures found for ${phenoVar} (${phenoDesc}) at p < ${pThresh} in model ${model}. Try relaxing the p-value threshold.`,
+          }],
+        };
+      }
+
+      // 2. For each exposure, check if it maps to a chemical in CTD and HHEAR
+      interface TriangulatedExposure {
+        exposure_var: string;
+        exposure_description: string;
+        beta: number;
+        direction: string;
+        se: number;
+        p_value: number;
+        i_squared: number | null;
+        n_cycles: number;
+        chemical_name: string | null;
+        ctd_mesh_id: string | null;
+        ctd_gene_count: number;
+        ctd_top_genes: string[];
+        ctd_disease_direct: boolean;
+        hhear_n_cohorts: number;
+        hhear_codes: string[];
+      }
+
+      const triangulated: TriangulatedExposure[] = [];
+
+      for (const hit of epwasHits.slice(0, maxN)) {
+        const entry: TriangulatedExposure = {
+          exposure_var: hit.evarname,
+          exposure_description: hit.desc,
+          beta: Math.round(hit.estimate * 10000) / 10000,
+          direction: hit.estimate > 0 ? "↑" : "↓",
+          se: Math.round(hit.se * 10000) / 10000,
+          p_value: hit.p_value,
+          i_squared: hit.i_squared != null ? Math.round(hit.i_squared * 10) / 10 : null,
+          n_cycles: hit.k,
+          chemical_name: null,
+          ctd_mesh_id: null,
+          ctd_gene_count: 0,
+          ctd_top_genes: [],
+          ctd_disease_direct: false,
+          hhear_n_cohorts: 0,
+          hhear_codes: [],
+        };
+
+        // Check CTD mapping
+        const ctdMapping = CTD_BY_NHANES.get(hit.evarname);
+        if (ctdMapping) {
+          const mapping = ctdMapping;
+          entry.chemical_name = mapping.chemical_name;
+          entry.ctd_mesh_id = mapping.mesh_id;
+          entry.hhear_codes = mapping.hhear_code ? [mapping.hhear_code] : [];
+
+          // Query CTD gene count and top genes
+          try {
+            const gc = await ctx.db.query<{ cnt: number | bigint }>(`
+              SELECT count(DISTINCT gene_symbol) as cnt FROM ctd_chem_gene
+              WHERE mesh_id = '${mapping.mesh_id}' AND organism = 'Homo sapiens'
+            `);
+            entry.ctd_gene_count = Number(gc[0]?.cnt ?? 0);
+
+            const topG = await ctx.db.query<{ gene_symbol: string; n: number | bigint }>(`
+              SELECT gene_symbol, count(*) as n FROM ctd_chem_gene
+              WHERE mesh_id = '${mapping.mesh_id}' AND organism = 'Homo sapiens'
+              GROUP BY gene_symbol ORDER BY n DESC LIMIT 5
+            `);
+            entry.ctd_top_genes = topG.map((g) => g.gene_symbol);
+          } catch { /* CTD not loaded */ }
+
+          // Check for direct disease evidence
+          try {
+            const dc = await ctx.db.query<{ cnt: number | bigint }>(`
+              SELECT count(*) as cnt FROM ctd_chem_disease
+              WHERE mesh_id = '${mapping.mesh_id}'
+                AND direct_evidence IS NOT NULL AND direct_evidence != ''
+            `);
+            entry.ctd_disease_direct = Number(dc[0]?.cnt ?? 0) > 0;
+          } catch { /* CTD not loaded */ }
+
+          // Count HHEAR cohorts
+          if (entry.hhear_codes.length > 0) {
+            for (const cc of ctx.cohorts) {
+              if (entry.hhear_codes.some((hc) =>
+                cc.analytes.some((a) => a.toLowerCase() === hc.toLowerCase())
+              )) {
+                entry.hhear_n_cohorts++;
+              }
+            }
+          }
+        }
+
+        triangulated.push(entry);
+      }
+
+      // Sort: chemicals with CTD data first, then by p-value
+      triangulated.sort((a, b) => {
+        if (a.ctd_gene_count > 0 && b.ctd_gene_count === 0) return -1;
+        if (a.ctd_gene_count === 0 && b.ctd_gene_count > 0) return 1;
+        return a.p_value - b.p_value;
+      });
+
+      // Determine which biological system this phenotype belongs to
+      const phenoDescLower = phenoDesc.toLowerCase();
+      const phenoSystem = BIOLOGICAL_SYSTEMS.find((sys) =>
+        sys.phenotype_patterns.some((p) =>
+          p.startsWith("LBX") || p.startsWith("DX") || p.startsWith("BM") || p.startsWith("BP")
+            ? phenoVar.includes(p)
+            : phenoDescLower.includes(p.toLowerCase())
+        )
+      );
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            phenotype: phenoVar,
+            phenotype_description: phenoDesc,
+            biological_system: phenoSystem?.name ?? "Other",
+            system_marker_genes: phenoSystem?.marker_genes ?? [],
+            model: MODEL_DESCRIPTIONS[model],
+            p_threshold: pThresh,
+            total_significant_exposures: epwasHits.length,
+            showing: triangulated.length,
+            exposures: triangulated,
+            interpretation: [
+              `Found ${epwasHits.length} exposures significantly associated with ${phenoDesc} (${phenoVar}) at p < ${pThresh}.`,
+              `${triangulated.filter((t) => t.ctd_gene_count > 0).length} exposures have CTD mechanistic data.`,
+              `${triangulated.filter((t) => t.hhear_n_cohorts > 0).length} exposures have HHEAR cohort data.`,
+              phenoSystem
+                ? `This phenotype maps to the "${phenoSystem.name}" biological system. Use ctd_triangulate on individual chemicals for full directional hypotheses using the ${phenoSystem.marker_genes.length} marker genes for this system.`
+                : "Use ctd_triangulate on individual chemical hits for full directional hypotheses.",
+            ].join(" "),
+            source: "EP-WAS: Patel lab NHANES meta-analyses; CTD: Comparative Toxicogenomics Database; HHEAR: Human Health Exposure Analysis Resource",
+          }, bigintReplacer, 2),
+        }],
+      };
+    }
+  );
+
+  // ── Tool 36: exposure_profile ────────────────────────────────────
+  server.tool(
+    "exposure_profile",
+    "Given a chemical and optional demographic profile (age, sex, race/ethnicity, BMI), compute the expected exposure distribution from NHANES, then contextualize top EP-WAS associations within that range. Returns: (1) population-wide exposure percentiles, (2) subgroup-specific percentiles matching the profile, (3) biomarker thresholds if available, and (4) top phenotype associations with effect sizes interpreted at the subgroup's exposure level.",
+    {
+      chemical: z
+        .string()
+        .describe("Chemical name ('lead'), NHANES code ('LBXBPB'), HHEAR code ('Pb'), or CAS number"),
+      age: z
+        .number()
+        .optional()
+        .describe("Age in years (uses ±5 year window)"),
+      sex: z
+        .enum(["male", "female"])
+        .optional()
+        .describe("Sex"),
+      race_ethnicity: z
+        .enum(["mexican_american", "other_hispanic", "non_hispanic_white", "non_hispanic_black", "other_multiracial"])
+        .optional()
+        .describe("Race/ethnicity (RIDRETH1 categories)"),
+      bmi: z
+        .number()
+        .optional()
+        .describe("BMI in kg/m² (uses WHO category: <18.5, 18.5-25, 25-30, ≥30)"),
+      cycles: z
+        .array(z.string())
+        .optional()
+        .describe("NHANES cycles (default: most recent 3 available)"),
+      model_number: z
+        .number()
+        .optional()
+        .default(2)
+        .describe("EP-WAS adjustment model for associations (default: 2 = fully adjusted)"),
+      top_n: z
+        .number()
+        .optional()
+        .default(15)
+        .describe("Number of top associations to contextualize (default: 15)"),
+    },
+    async ({ chemical, age, sex, race_ethnicity, bmi, cycles, model_number, top_n }) => {
+      // ── 1. Resolve chemical to NHANES variable code ──
+      let nhanesVar: string | null = null;
+      let chemName: string = chemical;
+      let units: string | null = null;
+
+      // Try direct NHANES variable resolution
+      const directResolve = await ctx.resolver.resolve(chemical);
+      if (directResolve.resolved && directResolve.variable) {
+        nhanesVar = directResolve.variable.variableName;
+        chemName = directResolve.variable.description;
+      }
+
+      // Try CompTox → HHEAR → NHANES bridge
+      if (!nhanesVar) {
+        const profile = resolveChemical(chemical);
+        if (profile) {
+          chemName = profile.chemical_name;
+          const bridgeEntry = BRIDGE_BY_HHEAR.get(profile.hhear_code);
+          if (bridgeEntry && bridgeEntry.nhanes_codes.length > 0) {
+            // Prefer blood matrix, fall back to first
+            const bloodCode = bridgeEntry.nhanes_codes.find((n) => n.matrix === "blood" || n.matrix === "serum");
+            const chosen = bloodCode ?? bridgeEntry.nhanes_codes[0];
+            nhanesVar = chosen.code;
+            units = chosen.units;
+          }
+        }
+      }
+
+      // Try CTD mapping
+      if (!nhanesVar) {
+        const ctdMappings = resolveChemicalForCTD(chemical);
+        if (ctdMappings.length > 0 && ctdMappings[0].nhanes_vars.length > 0) {
+          nhanesVar = ctdMappings[0].nhanes_vars[0];
+          chemName = ctdMappings[0].chemical_name;
+        }
+      }
+
+      if (!nhanesVar) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Could not resolve "${chemical}" to an NHANES variable code. Try a specific NHANES code (e.g., 'LBXBPB'), chemical name ('lead'), or HHEAR code ('Pb').`,
+          }],
+        };
+      }
+
+      // ── 2. Build demographic subgroup filter ──
+      const filterParts: string[] = [];
+      const profileDesc: Record<string, unknown> = {};
+
+      if (age != null) {
+        const ageLow = Math.max(0, age - 5);
+        const ageHigh = age + 5;
+        filterParts.push(`RIDAGEYR >= ${ageLow} & RIDAGEYR <= ${ageHigh}`);
+        profileDesc.age = `${ageLow}-${ageHigh}`;
+      }
+
+      if (sex) {
+        const sexCode = sex === "male" ? 1 : 2;
+        filterParts.push(`RIAGENDR == ${sexCode}`);
+        profileDesc.sex = sex;
+      }
+
+      if (race_ethnicity) {
+        const raceMap: Record<string, number> = {
+          mexican_american: 1,
+          other_hispanic: 2,
+          non_hispanic_white: 3,
+          non_hispanic_black: 4,
+          other_multiracial: 5,
+        };
+        filterParts.push(`RIDRETH1 == ${raceMap[race_ethnicity]}`);
+        profileDesc.race_ethnicity = race_ethnicity;
+      }
+
+      if (bmi != null) {
+        if (bmi < 18.5) {
+          filterParts.push("BMXBMI < 18.5");
+          profileDesc.bmi_category = "underweight (<18.5)";
+        } else if (bmi < 25) {
+          filterParts.push("BMXBMI >= 18.5 & BMXBMI < 25");
+          profileDesc.bmi_category = "normal (18.5-25)";
+        } else if (bmi < 30) {
+          filterParts.push("BMXBMI >= 25 & BMXBMI < 30");
+          profileDesc.bmi_category = "overweight (25-30)";
+        } else {
+          filterParts.push("BMXBMI >= 30");
+          profileDesc.bmi_category = "obese (≥30)";
+        }
+      }
+
+      const subgroupFilter = filterParts.length > 0 ? filterParts.join(" & ") : null;
+
+      // ── 3. Run R script for distributions ──
+      let seriesCycles: string[] | undefined;
+      if (cycles) {
+        seriesCycles = mapCyclesToSeries(cycles);
+      }
+
+      let rResult: Record<string, unknown>;
+      try {
+        rResult = await ctx.rExec.execute(
+          "exposure_profile.R",
+          {
+            variable: nhanesVar,
+            cycles: seriesCycles ?? null,
+            subgroup: subgroupFilter,
+          },
+          120000
+        ) as Record<string, unknown>;
+      } catch (err) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `R computation failed: ${(err as Error).message}`,
+          }],
+        };
+      }
+
+      if (rResult.error) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Exposure profile computation failed: ${rResult.error}`,
+          }],
+        };
+      }
+
+      // ── 4. Query EP-WAS top associations ──
+      const model = model_number ?? 2;
+      const maxAssoc = top_n ?? 15;
+
+      interface EpwasAssoc {
+        pvarname: string;
+        desc: string;
+        estimate: number;
+        se: number;
+        p_value: number;
+        i_squared: number | null;
+        k: number;
+      }
+
+      let associations: EpwasAssoc[] = [];
+      try {
+        associations = await ctx.db.query<EpwasAssoc>(
+          `SELECT
+             am.pvarname,
+             COALESCE(vn.desc, am.pvarname) as desc,
+             am.estimate,
+             am."std.error" as se,
+             am."p.value" as p_value,
+             am."i.squared" as i_squared,
+             am.nobs as k
+           FROM pe_stats.adjusted_meta am
+           LEFT JOIN (
+             SELECT "Variable.Name" as vname, MIN("Variable.Description") as desc
+             FROM pe_stats.variable_names_epcf
+             GROUP BY "Variable.Name"
+           ) vn ON am.pvarname = vn.vname
+           WHERE am.evarname = '${nhanesVar}'
+             AND am.model_number = ${model}
+             AND am.expo_name = 'overall'
+             AND am."p.value" < 0.05
+           ORDER BY am."p.value" ASC
+           LIMIT ${maxAssoc}`
+        );
+      } catch {
+        // EP-WAS not loaded
+      }
+
+      // ── 5. Contextualize associations at subgroup exposure level ──
+      // Extract log10 stats for conversion
+      const subDist = rResult.subgroup as Record<string, unknown> | null;
+      const popDist = rResult.population as Record<string, unknown>;
+      const activeDist = subDist && !subDist.error ? subDist : popDist;
+      const activePercs = activeDist?.percentiles as Record<string, number> | null;
+      const log10Mean = (activeDist as any)?.log10_mean as number | null;
+      const log10Sd = (activeDist as any)?.log10_sd as number | null;
+
+      interface ContextualizedAssoc {
+        phenotype: string;
+        phenotype_description: string;
+        beta: number;
+        direction: string;
+        se: number;
+        p_value: number;
+        n_cycles: number;
+        interpretation: string;
+      }
+
+      const contextualizedAssocs: ContextualizedAssoc[] = associations.map((a) => {
+        const direction = a.estimate > 0 ? "↑" : "↓";
+        let interpretation = "";
+
+        if (activePercs && log10Sd && log10Sd > 0) {
+          const p25 = activePercs.p25;
+          const p75 = activePercs.p75;
+          const p50 = activePercs.p50;
+
+          if (p25 > 0 && p75 > 0 && p50 > 0) {
+            // EP-WAS beta is per 1 SD of log10(exposure)
+            // IQR in log10 space / SD = number of SDs across IQR
+            const iqrLog10 = Math.log10(p75) - Math.log10(p25);
+            const iqrSDs = iqrLog10 / log10Sd;
+            const expectedChange = a.estimate * iqrSDs;
+
+            interpretation = `At the subgroup median (${p50}${units ? " " + units : ""}), moving across the IQR (${p25}–${p75}) spans ${Math.round(iqrSDs * 100) / 100} SDs of log₁₀-exposure, corresponding to an estimated ${direction}${Math.abs(Math.round(expectedChange * 1000) / 1000)} change in ${a.desc}.`;
+          }
+        }
+
+        if (!interpretation) {
+          interpretation = `${direction}${a.desc} per 1-SD increase in log₁₀(${chemName}), β=${Math.round(a.estimate * 10000) / 10000}.`;
+        }
+
+        return {
+          phenotype: a.pvarname,
+          phenotype_description: a.desc,
+          beta: Math.round(a.estimate * 10000) / 10000,
+          direction,
+          se: Math.round(a.se * 10000) / 10000,
+          p_value: a.p_value,
+          n_cycles: a.k,
+          interpretation,
+        };
+      });
+
+      // ── 6. Look up biomarker thresholds ──
+      const thresholds = THRESHOLDS_BY_NHANES_VAR.get(nhanesVar) ?? [];
+      const thresholdContext = thresholds.map((t) => {
+        const result: Record<string, unknown> = {
+          reference_value: t.reference_value,
+          units: t.units,
+          source: t.reference_source,
+          level: t.level,
+          description: t.description,
+          population: t.population,
+        };
+
+        // Check if subgroup percentiles exceed threshold
+        if (activePercs) {
+          const p50 = activePercs.p50;
+          const p95 = activePercs.p95;
+          if (p50 != null) result.subgroup_median_vs_threshold = p50 > t.reference_value ? "ABOVE" : "below";
+          if (p95 != null) result.subgroup_p95_vs_threshold = p95 > t.reference_value ? "ABOVE" : "below";
+        }
+
+        return result;
+      });
+
+      // ── 7. Cell size warning ──
+      const warnings: string[] = [];
+      const subN = subDist ? Number((subDist as any)?.n_unweighted ?? 0) : 0;
+      if (subDist && subN > 0 && subN < 30) {
+        warnings.push(`Subgroup sample size (N=${subN}) is below NCHS minimum of 30. Estimates may be unreliable. Consider broadening the demographic filters.`);
+      }
+      const pctLod = (activeDist as any)?.pct_below_lod;
+      if (pctLod != null && pctLod > 40) {
+        warnings.push(`${pctLod}% of values are below the limit of detection. Distribution estimates may be imprecise.`);
+      }
+
+      // ── 8. Assemble output ──
+      const output: Record<string, unknown> = {
+        chemical: chemName,
+        nhanes_variable: nhanesVar,
+        units,
+        demographic_profile: Object.keys(profileDesc).length > 0 ? profileDesc : "none (population-wide)",
+        population_distribution: popDist,
+        subgroup_distribution: subDist,
+        biomarker_thresholds: thresholdContext.length > 0 ? thresholdContext : undefined,
+        top_associations: {
+          model: MODEL_DESCRIPTIONS[model],
+          n_significant: associations.length,
+          associations: contextualizedAssocs,
+        },
+        warnings: warnings.length > 0 ? warnings : undefined,
+        interpretation: [
+          subDist && !subDist.error
+            ? `For a ${Object.values(profileDesc).join(", ")} individual, the expected ${chemName} level is around the subgroup median of ${activePercs?.p50 ?? "unknown"}${units ? " " + units : ""} (IQR: ${activePercs?.p25}–${activePercs?.p75}).`
+            : `Population-wide ${chemName} median: ${activePercs?.p50 ?? "unknown"}${units ? " " + units : ""}.`,
+          associations.length > 0
+            ? `The top EP-WAS associations are contextualized at this exposure level, showing the expected phenotype changes across the subgroup's interquartile range.`
+            : "No significant EP-WAS associations found for this exposure.",
+          thresholdContext.length > 0
+            ? `Regulatory thresholds are available for comparison.`
+            : "",
+        ].filter(Boolean).join(" "),
+        source: "NHANES survey-weighted distributions; EP-WAS: Patel lab meta-analyses (adjusted_meta); Thresholds: CDC/WHO/German HBM/NASEM",
+      };
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify(output, bigintReplacer, 2),
+        }],
+      };
+    }
+  );
+
+  console.error(`[exposomeql] Registered 36 tools (6 Class 1, 5 Class 2, 6 Class 3, 9 HHEAR, 1 Chemical, 5 CTD, 4 Cross-cutting)`);
 }
 
 /** Find a cohort config by ID */

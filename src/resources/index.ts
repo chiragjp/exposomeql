@@ -5,6 +5,7 @@ import { NCHS_GUIDELINES } from "./content/nchs-guidelines.js";
 import { EPWAS_METHODS, VOE_GUIDE } from "./content/epwas-methods.js";
 import { resolveChemical, COMPTOX_CHEMICALS } from "../variables/comptox-chemicals.js";
 import { BRIDGE_BY_HHEAR, BRIDGE_BY_NHANES } from "../variables/nhanes-hhear-bridge.js";
+import { resolveChemicalForCTD, CTD_CHEMICAL_MAP, CTD_BY_CATEGORY } from "../variables/ctd-chemical-map.js";
 
 export function registerResources(server: McpServer, ctx: AppContext): void {
   // ─── NHANES Codebook (template resources) ─────────────────────────
@@ -323,5 +324,146 @@ export function registerResources(server: McpServer, ctx: AppContext): void {
     }
   );
 
-  console.error("[exposomeql] Registered 10 resources");
+  // ─── CTD (Comparative Toxicogenomics Database) ──────────────────
+
+  server.resource(
+    "ctd-chemical",
+    new ResourceTemplate("ctd://chemical/{identifier}", { list: undefined }),
+    async (uri, variables) => {
+      const identifier = variables.identifier as string;
+      const mappings = resolveChemicalForCTD(identifier);
+
+      if (mappings.length === 0) {
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              mimeType: "text/plain" as const,
+              text: `Chemical "${identifier}" not found in CTD mapping. ${CTD_CHEMICAL_MAP.length} chemicals mapped. Try a chemical name, NHANES code, HHEAR code, or CAS number.`,
+            },
+          ],
+        };
+      }
+
+      // Aggregate data from all CTD tables for this chemical
+      const meshIds = [...new Set(mappings.map((m) => m.mesh_id))];
+      const meshList = meshIds.map((id) => `'${id}'`).join(", ");
+
+      let geneCount = 0;
+      let diseaseCount = 0;
+      let pathwayCount = 0;
+
+      try {
+        const gc = await ctx.db.query(`SELECT count(*) as cnt FROM ctd_chem_gene WHERE mesh_id IN (${meshList}) AND organism = 'Homo sapiens'`);
+        geneCount = Number((gc[0] as any)?.cnt ?? 0);
+      } catch { /* CTD not loaded */ }
+
+      try {
+        const dc = await ctx.db.query(`SELECT count(*) as cnt FROM ctd_chem_disease WHERE mesh_id IN (${meshList})`);
+        diseaseCount = Number((dc[0] as any)?.cnt ?? 0);
+      } catch { /* CTD not loaded */ }
+
+      try {
+        const pc = await ctx.db.query(`SELECT count(*) as cnt FROM ctd_chem_pathway WHERE mesh_id IN (${meshList})`);
+        pathwayCount = Number((pc[0] as any)?.cnt ?? 0);
+      } catch { /* CTD not loaded */ }
+
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "application/json" as const,
+            text: JSON.stringify(
+              {
+                chemical: mappings[0].chemical_name,
+                category: mappings[0].category,
+                cas: mappings[0].cas ?? null,
+                mesh_ids: meshIds,
+                nhanes_vars: mappings.flatMap((m) => m.nhanes_vars),
+                hhear_codes: mappings.filter((m) => m.hhear_code).map((m) => m.hhear_code),
+                ctd_summary: {
+                  gene_interactions_human: geneCount,
+                  disease_associations: diseaseCount,
+                  enriched_pathways: pathwayCount,
+                },
+                tools_available: [
+                  "ctd_chemical_genes — curated gene interactions",
+                  "ctd_chemical_diseases — disease associations (curated + inferred)",
+                  "ctd_chemical_pathways — enriched KEGG/Reactome pathways",
+                  "ctd_chemical_go — enriched Gene Ontology terms",
+                  "ctd_triangulate — combine EP-WAS + CTD evidence",
+                ],
+                source: "Comparative Toxicogenomics Database (CTD), ctdbase.org",
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
+
+  server.resource(
+    "ctd-methods-overview",
+    "ctd://methods/overview",
+    async (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/markdown" as const,
+          text: `# Comparative Toxicogenomics Database (CTD)
+
+## Overview
+CTD is a publicly available database that provides manually curated information about
+chemical–gene/protein interactions, chemical–disease and gene–disease relationships.
+It is maintained by North Carolina State University and updated monthly.
+
+## Data Types in ExposomeQL
+
+### Chemical-Gene Interactions (ctd_chem_gene)
+Curated from published literature. Each interaction specifies:
+- **Gene symbol** and NCBI Gene ID
+- **Interaction type**: increases/decreases expression, activity, phosphorylation, etc.
+- **Organism**: filtered to Homo sapiens by default
+- **PubMed references**: source publications
+
+### Chemical-Disease Associations (ctd_chem_disease)
+Two types of evidence:
+- **Direct evidence** (curated): "marker/mechanism" or "therapeutic" — manually extracted from literature
+- **Inferred** (computed): chemical→gene→disease inference via shared gene interactions
+  - **Inference score**: topology-based network similarity metric (higher = stronger evidence)
+
+### Chemical-Pathway Enrichment (ctd_chem_pathway)
+Statistically enriched KEGG and Reactome pathways among genes that interact with a chemical:
+- **Hypergeometric test** with Bonferroni correction
+- gene_count: number of interacting genes in the pathway
+- total_genes: total genes in the pathway
+
+### Chemical-GO Enrichment (ctd_chem_go)
+Enriched Gene Ontology terms (Biological Process, Molecular Function, Cellular Component):
+- Same statistical framework as pathway enrichment
+- Provides functional annotation of chemical effects
+
+## Chemical Coverage
+ExposomeQL maps **${CTD_CHEMICAL_MAP.length} chemicals** from NHANES and HHEAR to CTD MeSH identifiers,
+covering:
+${Array.from(CTD_BY_CATEGORY.entries()).map(([cat, chems]) => `- **${cat}**: ${chems.length} chemicals`).join("\n")}
+
+## Triangulation
+The \`ctd_triangulate\` tool combines epidemiological evidence (EP-WAS from NHANES) with
+mechanistic evidence (CTD gene/disease/pathway data) to provide multi-level support for
+exposure-health associations. This triangulation approach strengthens causal inference
+beyond what either data source provides alone.
+
+## Citation
+Davis AP, et al. Comparative Toxicogenomics Database's 20th anniversary: update 2025.
+Nucleic Acids Research, 2025, 53(D1):D1328-D1338.
+`,
+        },
+      ],
+    })
+  );
+
+  console.error("[exposomeql] Registered 12 resources");
 }
