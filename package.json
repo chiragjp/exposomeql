@@ -1,17 +1,26 @@
 {
   "name": "exposomeql",
-  "version": "0.1.0",
-  "description": "MCP server for exposome research — query NHANES data and EP-WAS associations via natural language",
+  "version": "0.2.0",
+  "description": "MCP server for exposome research — 46 tools for querying 66.8M exposure-phenotype associations, NHANES survey data, CTD toxicogenomics, HHEAR cohort biomonitoring, and nutrient RCT evidence via natural language",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "exposomeql": "./bin/exposomeql.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chiragjp/exposomeql"
+  },
+  "homepage": "https://github.com/chiragjp/exposomeql#readme",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "convert-data": "tsx scripts/convert-to-parquet.ts"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx scripts/smoke-test.ts",
+    "test:ci": "tsc --noEmit",
+    "convert-data": "tsx scripts/convert-to-parquet.ts",
+    "ctd-etl": "tsx scripts/ctd-etl.ts"
   },
   "keywords": ["mcp", "nhanes", "exposome", "epwas", "epidemiology"],
   "author": "Chirag J. Patel",
@@ -33,6 +42,13 @@
   "files": [
     "dist/",
     "bin/",
-    "src/r-bridge/r-scripts/"
+    "src/r-bridge/r-scripts/",
+    "src/data/cohort-metadata.json",
+    "src/data/epi-column-map.json",
+    "data/nutrient_rct_evidence.csv",
+    "data/nutrient_outcome_phenotype_map.csv",
+    "scripts/setup-local-data.sh",
+    "scripts/ctd-etl.ts",
+    "README.md"
   ]
 }

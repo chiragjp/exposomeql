@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import path from "path";
+import fs from "fs";
 import type { AppContext, ResolveResult, CohortConfig } from "../types.js";
 import { MODEL_DESCRIPTIONS, CYCLE_TO_SERIES, SERIES_MAP } from "../types.js";
 import { formatCellSizeWarning } from "../guardrails/cell-size.js";
@@ -4368,7 +4369,1146 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
     }
   );
 
-  console.error(`[exposomeql] Registered 36 tools (6 Class 1, 5 Class 2, 6 Class 3, 9 HHEAR, 1 Chemical, 5 CTD, 4 Cross-cutting)`);
+  // ═══════════════════════════════════════════════════════════════════
+  // CLASS 7: NUTRIENT TRIANGULATION
+  // ═══════════════════════════════════════════════════════════════════
+
+  // --- Nutrient RCT evidence data (loaded once, used by all nutrient tools) ---
+  const NUTRIENT_RCT_DATA: Array<Record<string, string>> = [];
+  const NUTRIENT_PHENOTYPE_MAP: Array<Record<string, string>> = [];
+
+  // Load CSVs synchronously at registration time
+  try {
+    const rctPath = path.join(__dirname, "..", "..", "data", "nutrient_rct_evidence.csv");
+    if (fs.existsSync(rctPath)) {
+      const lines = fs.readFileSync(rctPath, "utf-8").split("\n").filter(l => l.trim());
+      const headers = lines[0].split(",");
+      for (let i = 1; i < lines.length; i++) {
+        const vals = lines[i].split(",");
+        const row: Record<string, string> = {};
+        headers.forEach((h, j) => { row[h.trim()] = (vals[j] ?? "").trim(); });
+        NUTRIENT_RCT_DATA.push(row);
+      }
+      console.error(`[exposomeql] Loaded ${NUTRIENT_RCT_DATA.length} nutrient RCT evidence rows`);
+    }
+    const mapPath = path.join(__dirname, "..", "..", "data", "nutrient_outcome_phenotype_map.csv");
+    if (fs.existsSync(mapPath)) {
+      const lines = fs.readFileSync(mapPath, "utf-8").split("\n").filter(l => l.trim());
+      const headers = lines[0].split(",");
+      for (let i = 1; i < lines.length; i++) {
+        const vals = lines[i].split(",");
+        const row: Record<string, string> = {};
+        headers.forEach((h, j) => { row[h.trim()] = (vals[j] ?? "").trim(); });
+        NUTRIENT_PHENOTYPE_MAP.push(row);
+      }
+      console.error(`[exposomeql] Loaded ${NUTRIENT_PHENOTYPE_MAP.length} nutrient phenotype mappings`);
+    }
+  } catch (err) {
+    console.error(`[exposomeql] Warning: could not load nutrient CSV data: ${(err as Error).message}`);
+  }
+
+  /** Map of nutrient names to their dietary recall and biomarker NHANES variables */
+  const NUTRIENT_VARS: Record<string, { dietary: string; biomarker?: string; name: string }> = {
+    "vitamin d":    { dietary: "DR1TVD",   biomarker: "LBDVIDMS", name: "Vitamin D" },
+    "folate":       { dietary: "DR1TFOLA", biomarker: "LBXFOL",   name: "Folic acid" },
+    "folic acid":   { dietary: "DR1TFOLA", biomarker: "LBXFOL",   name: "Folic acid" },
+    "iron":         { dietary: "DR1TIRON", biomarker: "LBXIRN",   name: "Iron" },
+    "calcium":      { dietary: "DR1TCALC", biomarker: "LBXSCA",   name: "Calcium" },
+    "magnesium":    { dietary: "DR1TMAGN",                         name: "Magnesium" },
+    "zinc":         { dietary: "DR1TZINC",                         name: "Zinc" },
+    "selenium":     { dietary: "DR1TSELE", biomarker: "LBXSEL",   name: "Selenium" },
+    "vitamin c":    { dietary: "DR1TVC",                           name: "Vitamin C" },
+    "vitamin e":    { dietary: "DR1TATOC",                         name: "Vitamin E" },
+    "vitamin a":    { dietary: "DR1TVARA",                         name: "Vitamin A" },
+    "vitamin b12":  { dietary: "DR1TVB12",                         name: "Vitamin B12" },
+    "vitamin k":    { dietary: "DR1TVK",                           name: "Vitamin K" },
+    "sodium":       { dietary: "DR1TSODI",                         name: "Sodium" },
+    "potassium":    { dietary: "DR1TPOTA",                         name: "Potassium" },
+    "fiber":        { dietary: "DR1TFIBE",                         name: "Fiber" },
+    "omega-3":      { dietary: "DR1TP226",                         name: "Omega-3" },
+    "omega-3 epa":  { dietary: "DR1TP205",                         name: "Omega-3 (EPA)" },
+    "omega-3 dha":  { dietary: "DR1TP226",                         name: "Omega-3 (DHA)" },
+  };
+
+  /** Resolve a nutrient query to its NHANES variables */
+  function resolveNutrient(query: string): { dietary: string; biomarker?: string; name: string } | null {
+    const q = query.toLowerCase().trim();
+    if (NUTRIENT_VARS[q]) return NUTRIENT_VARS[q];
+    // Fuzzy match
+    for (const [key, val] of Object.entries(NUTRIENT_VARS)) {
+      if (q.includes(key) || key.includes(q)) return val;
+    }
+    return null;
+  }
+
+  // ── Tool 1: nutrient_rct_evidence ──
+
+  server.tool(
+    "nutrient_rct_evidence",
+    "Look up curated RCT meta-analysis evidence for a nutrient. Returns pooled effect estimates from Cochrane reviews and high-impact journal meta-analyses, with NHANES phenotype mappings.",
+    {
+      nutrient: z.string().describe("Nutrient name (e.g., 'vitamin D', 'folate', 'iron', 'omega-3')"),
+      outcome_type: z.enum(["biomarker", "clinical_endpoint", "all"]).optional().default("all")
+        .describe("Filter by outcome type: 'biomarker' (NHANES-measurable), 'clinical_endpoint' (disease/mortality), or 'all'"),
+    },
+    async ({ nutrient, outcome_type }) => {
+      const resolved = resolveNutrient(nutrient);
+      if (!resolved) {
+        const available = [...new Set(Object.values(NUTRIENT_VARS).map(v => v.name))];
+        return { content: [{ type: "text" as const, text: `Nutrient "${nutrient}" not found. Available: ${available.join(", ")}` }] };
+      }
+
+      let filtered = NUTRIENT_RCT_DATA.filter(r => {
+        const rName = r.nutrient?.toLowerCase() ?? "";
+        const qName = resolved.name.toLowerCase();
+        return rName.startsWith(qName) || rName.includes(qName);
+      });
+
+      if (outcome_type && outcome_type !== "all") {
+        filtered = filtered.filter(r => r.outcome_type === outcome_type || r.outcome_type === "biomarker_proxy");
+      }
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            nutrient: resolved.name,
+            nhanes_dietary_var: resolved.dietary,
+            nhanes_biomarker_var: resolved.biomarker ?? null,
+            n_outcomes: filtered.length,
+            outcomes: filtered.map(r => ({
+              outcome: r.outcome,
+              nhanes_phenotype: r.nhanes_phenotype || null,
+              outcome_type: r.outcome_type,
+              effect_measure: r.effect_measure,
+              effect_estimate: r.effect_estimate,
+              ci_lower: r.ci_lower || null,
+              ci_upper: r.ci_upper || null,
+              direction: r.direction,
+              n_trials: r.n_trials || null,
+              n_participants: r.n_participants || null,
+              source: r.source_ref,
+              journal: r.journal,
+              pmid: r.pmid || null,
+              notes: r.notes || null,
+            })),
+            source: "Curated from Cochrane reviews and high-impact meta-analyses of RCTs (March 2026). See data/nutrient_rct_search_methodology.md for search protocol.",
+          }, null, 2),
+        }],
+      };
+    }
+  );
+
+  // ── Tool 2: nutrient_phenotype_associations ──
+
+  server.tool(
+    "nutrient_phenotype_associations",
+    "Get EP-WAS observational associations for a nutrient across all NHANES phenotypes. Can use either dietary recall (DR1T*) or serum biomarker as the exposure variable.",
+    {
+      nutrient: z.string().describe("Nutrient name (e.g., 'vitamin D', 'iron', 'folate')"),
+      exposure_type: z.enum(["dietary", "biomarker"]).optional().default("dietary")
+        .describe("Use 'dietary' for 24-hour recall (DR1T*) or 'biomarker' for serum measurement"),
+      p_threshold: z.number().optional().default(0.001).describe("P-value threshold (default 0.001)"),
+      top_n: z.number().min(1).max(200).optional().default(30).describe("Max results (1-200)"),
+    },
+    async ({ nutrient, exposure_type, p_threshold, top_n }) => {
+      const resolved = resolveNutrient(nutrient);
+      if (!resolved) {
+        const available = [...new Set(Object.values(NUTRIENT_VARS).map(v => v.name))];
+        return { content: [{ type: "text" as const, text: `Nutrient "${nutrient}" not found. Available: ${available.join(", ")}` }] };
+      }
+
+      const exposureVar = exposure_type === "biomarker" && resolved.biomarker
+        ? resolved.biomarker
+        : resolved.dietary;
+
+      if (exposure_type === "biomarker" && !resolved.biomarker) {
+        return { content: [{ type: "text" as const, text: `No serum biomarker variable available for ${resolved.name}. Use exposure_type='dietary' for the 24-hour recall variable (${resolved.dietary}).` }] };
+      }
+
+      try {
+        const results = await ctx.db.query(
+          `SELECT
+             evarname as exposure,
+             pvarname as phenotype,
+             "estimate.uwls" as estimate,
+             "std.error.uwls" as std_error,
+             "p.value.uwls" as p_value,
+             "k.uwls" as n_studies,
+             CAST(model_number AS INTEGER) as model_number
+           FROM pe_stats.adjusted_meta_uwls
+           WHERE expo_name = 'expo'
+             AND CAST(model_number AS INTEGER) = 6
+             AND evarname = $1
+             AND ABS("p.value.uwls") < $2
+           ORDER BY ABS("estimate.uwls") DESC
+           LIMIT $3`,
+          exposureVar, p_threshold ?? 0.001, top_n ?? 30
+        );
+
+        const enriched = await Promise.all(
+          results.map(async (row: Record<string, unknown>) => {
+            const pVar = ctx.resolver.get(row.phenotype as string);
+            return {
+              ...row,
+              phenotype_description: pVar?.description ?? "Unknown",
+            };
+          })
+        );
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              nutrient: resolved.name,
+              exposure_variable: exposureVar,
+              exposure_type: exposure_type === "biomarker" && resolved.biomarker ? "biomarker" : "dietary_recall",
+              model: "Model 6: age + sex + race/ethnicity",
+              p_threshold,
+              n_results: enriched.length,
+              results: enriched,
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error querying EP-WAS for ${resolved.name}: ${(err as Error).message}` }] };
+      }
+    }
+  );
+
+  // ── Tool 3: nutrient_triangulate ──
+
+  server.tool(
+    "nutrient_triangulate",
+    "Triangulate evidence for a nutrient by comparing RCT meta-analysis effects against EP-WAS observational associations for the same biomarker outcomes. Returns concordance assessment for each outcome.",
+    {
+      nutrient: z.string().describe("Nutrient name (e.g., 'vitamin D', 'magnesium', 'fiber')"),
+      p_threshold: z.number().optional().default(0.05).describe("EP-WAS p-value threshold for considering an association (default 0.05)"),
+    },
+    async ({ nutrient, p_threshold }) => {
+      const resolved = resolveNutrient(nutrient);
+      if (!resolved) {
+        const available = [...new Set(Object.values(NUTRIENT_VARS).map(v => v.name))];
+        return { content: [{ type: "text" as const, text: `Nutrient "${nutrient}" not found. Available: ${available.join(", ")}` }] };
+      }
+
+      // Get biomarker RCT outcomes for this nutrient
+      const rctBiomarker = NUTRIENT_RCT_DATA.filter(r => {
+        const rName = r.nutrient?.toLowerCase() ?? "";
+        const qName = resolved.name.toLowerCase();
+        return (rName.startsWith(qName) || rName.includes(qName)) &&
+               (r.outcome_type === "biomarker" || r.outcome_type === "biomarker_proxy");
+      });
+
+      const rctClinical = NUTRIENT_RCT_DATA.filter(r => {
+        const rName = r.nutrient?.toLowerCase() ?? "";
+        const qName = resolved.name.toLowerCase();
+        return (rName.startsWith(qName) || rName.includes(qName)) && r.outcome_type === "clinical_endpoint";
+      });
+
+      const triangulation: Array<Record<string, unknown>> = [];
+      let concordant = 0;
+      let discordant = 0;
+      let rctNull = 0;
+      let noMatch = 0;
+
+      for (const rct of rctBiomarker) {
+        const phenotypes = (rct.nhanes_phenotype ?? "").split(";").map(p => p.trim()).filter(Boolean);
+        if (phenotypes.length === 0) { noMatch++; continue; }
+
+        for (const pheno of phenotypes) {
+          try {
+            const rows = await ctx.db.query(
+              `SELECT
+                 "estimate.uwls" as estimate,
+                 "p.value.uwls" as p_value
+               FROM pe_stats.adjusted_meta_uwls
+               WHERE expo_name = 'expo'
+                 AND CAST(model_number AS INTEGER) = 6
+                 AND evarname = $1
+                 AND pvarname = $2
+               ORDER BY ABS("p.value.uwls") ASC
+               LIMIT 1`,
+              resolved.dietary, pheno
+            );
+
+            if (rows.length === 0) { noMatch++; continue; }
+
+            const epwas = rows[0] as Record<string, unknown>;
+            const epwasBeta = epwas.estimate as number;
+            const epwasP = epwas.p_value as number;
+            const pVar = ctx.resolver.get(pheno);
+
+            // Concordance logic
+            let concordance = "unknown";
+            if (rct.direction === "null") {
+              concordance = "rct_null";
+              rctNull++;
+            } else if (rct.direction === "harmful") {
+              concordance = "harmful_in_rct";
+            } else {
+              const rctVal = parseFloat(rct.effect_estimate);
+              if (!isNaN(rctVal) && Math.abs(epwasP) < (p_threshold ?? 0.05)) {
+                if ((rctVal < 0 && epwasBeta < 0) || (rctVal > 0 && epwasBeta > 0)) {
+                  concordance = "concordant";
+                  concordant++;
+                } else {
+                  concordance = "discordant";
+                  discordant++;
+                }
+              } else if (Math.abs(epwasP) >= (p_threshold ?? 0.05)) {
+                concordance = "epwas_not_significant";
+              }
+            }
+
+            triangulation.push({
+              outcome: rct.outcome,
+              nhanes_phenotype: pheno,
+              phenotype_description: pVar?.description ?? pheno,
+              rct_effect_measure: rct.effect_measure,
+              rct_estimate: rct.effect_estimate,
+              rct_ci: rct.ci_lower && rct.ci_upper ? `(${rct.ci_lower}, ${rct.ci_upper})` : null,
+              rct_direction: rct.direction,
+              rct_source: rct.source_ref,
+              epwas_beta: epwasBeta,
+              epwas_p_value: epwasP,
+              epwas_direction: epwasBeta > 0 ? "positive" : "negative",
+              concordance,
+            });
+          } catch {
+            // Skip on query error
+          }
+        }
+      }
+
+      const tested = concordant + discordant;
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            nutrient: resolved.name,
+            nhanes_exposure: resolved.dietary,
+            summary: {
+              concordant,
+              discordant,
+              rct_null: rctNull,
+              no_epwas_match: noMatch,
+              concordance_rate: tested > 0 ? `${Math.round(100 * concordant / tested)}%` : "N/A",
+            },
+            biomarker_triangulation: triangulation,
+            clinical_endpoints: rctClinical.map(r => ({
+              outcome: r.outcome,
+              effect_measure: r.effect_measure,
+              effect_estimate: r.effect_estimate,
+              direction: r.direction,
+              source: r.source_ref,
+            })),
+            note: "Concordance compares the direction of RCT effect with EP-WAS observational association (dietary recall exposure, model 6). Discordance may indicate confounding in observational data.",
+          }, bigintReplacer, 2),
+        }],
+      };
+    }
+  );
+
+  // ── Tool 4: nutrient_biomarker_vs_dietary ──
+
+  server.tool(
+    "nutrient_biomarker_vs_dietary",
+    "Compare serum biomarker vs dietary recall (24-hour) as exposure for the same nutrient, testing which better agrees with RCT evidence. Highlights confounding in self-reported dietary data.",
+    {
+      nutrient: z.string().describe("Nutrient name (e.g., 'vitamin D', 'iron', 'calcium')"),
+    },
+    async ({ nutrient }) => {
+      const resolved = resolveNutrient(nutrient);
+      if (!resolved) {
+        const available = [...new Set(Object.values(NUTRIENT_VARS).map(v => v.name))];
+        return { content: [{ type: "text" as const, text: `Nutrient "${nutrient}" not found. Available: ${available.join(", ")}` }] };
+      }
+
+      if (!resolved.biomarker) {
+        return { content: [{ type: "text" as const, text: `No serum biomarker variable available for ${resolved.name}. This comparison requires both a dietary recall and a biomarker measure. Nutrients with biomarkers: vitamin D (LBDVIDMS), folate (LBXFOL), iron (LBXIRN), calcium (LBXSCA), selenium (LBXSEL).` }] };
+      }
+
+      // Get biomarker RCT outcomes
+      const rctBiomarker = NUTRIENT_RCT_DATA.filter(r => {
+        const rName = r.nutrient?.toLowerCase() ?? "";
+        const qName = resolved.name.toLowerCase();
+        return (rName.startsWith(qName) || rName.includes(qName)) &&
+               (r.outcome_type === "biomarker" || r.outcome_type === "biomarker_proxy");
+      });
+
+      const comparisons: Array<Record<string, unknown>> = [];
+      let dietaryCorrect = 0, dietaryWrong = 0, dietaryNA = 0;
+      let biomarkerCorrect = 0, biomarkerWrong = 0, biomarkerNA = 0;
+
+      for (const rct of rctBiomarker) {
+        if (rct.direction === "null" || rct.direction === "harmful") continue;
+        const rctVal = parseFloat(rct.effect_estimate);
+        if (isNaN(rctVal)) continue;
+        const expectedDir = rctVal > 0 ? "positive" : "negative";
+
+        const phenotypes = (rct.nhanes_phenotype ?? "").split(";").map(p => p.trim()).filter(Boolean);
+        for (const pheno of phenotypes.slice(0, 1)) { // Use first phenotype to avoid double-counting
+          const pVar = ctx.resolver.get(pheno);
+          const comp: Record<string, unknown> = {
+            outcome: rct.outcome,
+            nhanes_phenotype: pheno,
+            phenotype_description: pVar?.description ?? pheno,
+            rct_expected_direction: expectedDir,
+            rct_source: rct.source_ref,
+          };
+
+          // Query dietary recall
+          try {
+            const drRows = await ctx.db.query(
+              `SELECT "estimate.uwls" as estimate, "p.value.uwls" as p_value
+               FROM pe_stats.adjusted_meta_uwls
+               WHERE expo_name = 'expo' AND CAST(model_number AS INTEGER) = 6
+                 AND evarname = $1 AND pvarname = $2
+               ORDER BY ABS("p.value.uwls") ASC LIMIT 1`,
+              resolved.dietary, pheno
+            );
+            if (drRows.length > 0) {
+              const dr = drRows[0] as Record<string, unknown>;
+              const drDir = (dr.estimate as number) > 0 ? "positive" : "negative";
+              const match = drDir === expectedDir;
+              comp.dietary_beta = dr.estimate;
+              comp.dietary_p = dr.p_value;
+              comp.dietary_direction = drDir;
+              comp.dietary_matches_rct = match;
+              if (match) dietaryCorrect++; else dietaryWrong++;
+            } else { comp.dietary_beta = null; dietaryNA++; }
+          } catch { comp.dietary_beta = null; dietaryNA++; }
+
+          // Query biomarker
+          try {
+            const bmRows = await ctx.db.query(
+              `SELECT "estimate.uwls" as estimate, "p.value.uwls" as p_value
+               FROM pe_stats.adjusted_meta_uwls
+               WHERE expo_name = 'expo' AND CAST(model_number AS INTEGER) = 6
+                 AND evarname = $1 AND pvarname = $2
+               ORDER BY ABS("p.value.uwls") ASC LIMIT 1`,
+              resolved.biomarker!, pheno
+            );
+            if (bmRows.length > 0) {
+              const bm = bmRows[0] as Record<string, unknown>;
+              const bmDir = (bm.estimate as number) > 0 ? "positive" : "negative";
+              const match = bmDir === expectedDir;
+              comp.biomarker_beta = bm.estimate;
+              comp.biomarker_p = bm.p_value;
+              comp.biomarker_direction = bmDir;
+              comp.biomarker_matches_rct = match;
+              if (match) biomarkerCorrect++; else biomarkerWrong++;
+            } else { comp.biomarker_beta = null; biomarkerNA++; }
+          } catch { comp.biomarker_beta = null; biomarkerNA++; }
+
+          comparisons.push(comp);
+        }
+      }
+
+      const dietaryTotal = dietaryCorrect + dietaryWrong;
+      const biomarkerTotal = biomarkerCorrect + biomarkerWrong;
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            nutrient: resolved.name,
+            dietary_variable: resolved.dietary,
+            biomarker_variable: resolved.biomarker,
+            summary: {
+              dietary_concordance: dietaryTotal > 0 ? `${dietaryCorrect}/${dietaryTotal} (${Math.round(100 * dietaryCorrect / dietaryTotal)}%)` : "N/A",
+              biomarker_concordance: biomarkerTotal > 0 ? `${biomarkerCorrect}/${biomarkerTotal} (${Math.round(100 * biomarkerCorrect / biomarkerTotal)}%)` : "N/A",
+              dietary_na: dietaryNA,
+              biomarker_na: biomarkerNA,
+            },
+            comparisons,
+            interpretation: biomarkerTotal > 0 && dietaryTotal > 0
+              ? `Biomarker (${resolved.biomarker}) concordance: ${Math.round(100 * biomarkerCorrect / biomarkerTotal)}% vs dietary recall (${resolved.dietary}): ${Math.round(100 * dietaryCorrect / dietaryTotal)}%. ${biomarkerCorrect / biomarkerTotal > dietaryCorrect / dietaryTotal ? "Biomarker exposure is more concordant with RCT evidence, suggesting dietary recall is confounded." : "Both sources show similar concordance with RCT evidence."}`
+              : "Insufficient data for comparison.",
+          }, bigintReplacer, 2),
+        }],
+      };
+    }
+  );
+
+  // ── Tool 5: nutrient_concordance_summary ──
+
+  server.tool(
+    "nutrient_concordance_summary",
+    "Summarize RCT vs EP-WAS concordance across ALL nutrients. Returns per-nutrient concordance rates and the overall concordance, with optional biomarker vs dietary recall comparison.",
+    {
+      outcome_type: z.enum(["biomarker", "all"]).optional().default("biomarker")
+        .describe("'biomarker' for NHANES-measurable outcomes only, 'all' for all including clinical endpoints"),
+      exposure_type: z.enum(["dietary", "biomarker", "both"]).optional().default("dietary")
+        .describe("Which exposure to use: 'dietary' (DR1T*), 'biomarker' (serum), or 'both' for comparison"),
+    },
+    async ({ outcome_type, exposure_type }) => {
+      const nutrientNames = [...new Set(Object.values(NUTRIENT_VARS).map(v => v.name))];
+      const perNutrient: Array<Record<string, unknown>> = [];
+      let totalConcordant = 0, totalDiscordant = 0, totalNull = 0;
+
+      for (const name of nutrientNames) {
+        const resolved = resolveNutrient(name);
+        if (!resolved) continue;
+
+        const rctMatches = NUTRIENT_RCT_DATA.filter(r => {
+          const rName = r.nutrient?.toLowerCase() ?? "";
+          const qName = resolved.name.toLowerCase();
+          const nameMatch = rName.startsWith(qName) || rName.includes(qName);
+          if (!nameMatch) return false;
+          if (outcome_type === "biomarker") return r.outcome_type === "biomarker" || r.outcome_type === "biomarker_proxy";
+          return true;
+        });
+
+        let c = 0, d = 0, n = 0;
+        for (const rct of rctMatches) {
+          if (rct.outcome_type === "clinical_endpoint") continue;
+          const phenotypes = (rct.nhanes_phenotype ?? "").split(";").map(p => p.trim()).filter(Boolean);
+          if (phenotypes.length === 0) continue;
+
+          const expVar = exposure_type === "biomarker" && resolved.biomarker ? resolved.biomarker : resolved.dietary;
+
+          for (const pheno of phenotypes.slice(0, 1)) {
+            try {
+              const rows = await ctx.db.query(
+                `SELECT "estimate.uwls" as estimate, "p.value.uwls" as p_value
+                 FROM pe_stats.adjusted_meta_uwls
+                 WHERE expo_name = 'expo' AND CAST(model_number AS INTEGER) = 6
+                   AND evarname = $1 AND pvarname = $2
+                 ORDER BY ABS("p.value.uwls") ASC LIMIT 1`,
+                expVar, pheno
+              );
+              if (rows.length === 0) continue;
+              const epwas = rows[0] as Record<string, unknown>;
+              const beta = epwas.estimate as number;
+              if (rct.direction === "null") { n++; continue; }
+              if (rct.direction === "harmful") continue;
+              const rctVal = parseFloat(rct.effect_estimate);
+              if (isNaN(rctVal)) continue;
+              if ((rctVal < 0 && beta < 0) || (rctVal > 0 && beta > 0)) c++;
+              else d++;
+            } catch { /* skip */ }
+          }
+        }
+
+        totalConcordant += c;
+        totalDiscordant += d;
+        totalNull += n;
+        const tested = c + d;
+
+        perNutrient.push({
+          nutrient: resolved.name,
+          exposure_variable: exposure_type === "biomarker" && resolved.biomarker ? resolved.biomarker : resolved.dietary,
+          concordant: c,
+          discordant: d,
+          rct_null: n,
+          concordance_rate: tested > 0 ? `${Math.round(100 * c / tested)}%` : "N/A",
+        });
+      }
+
+      const totalTested = totalConcordant + totalDiscordant;
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            exposure_type: exposure_type ?? "dietary",
+            outcome_type: outcome_type ?? "biomarker",
+            overall: {
+              concordant: totalConcordant,
+              discordant: totalDiscordant,
+              rct_null: totalNull,
+              total_tested: totalTested,
+              concordance_rate: totalTested > 0 ? `${Math.round(100 * totalConcordant / totalTested)}%` : "N/A",
+            },
+            per_nutrient: perNutrient.sort((a, b) => {
+              const aRate = (a.concordant as number) / Math.max(1, (a.concordant as number) + (a.discordant as number));
+              const bRate = (b.concordant as number) / Math.max(1, (b.concordant as number) + (b.discordant as number));
+              return bRate - aRate;
+            }),
+            note: "Concordance compares RCT effect direction with EP-WAS observational association direction. Higher concordance suggests the observational association is less confounded.",
+          }, bigintReplacer, 2),
+        }],
+      };
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CLASS 8: META-ANALYTIC DIAGNOSTICS
+  // ═══════════════════════════════════════════════════════════════════
+
+  /** NHANES cycle series mapping */
+  const CYCLE_LABELS: Record<string, string> = {
+    A: "1999-2000", B: "2001-2002", C: "2003-2004", D: "2005-2006",
+    E: "2007-2008", F: "2009-2010", G: "2011-2012", H: "2013-2014",
+    I: "2015-2016", J: "2017-2018",
+  };
+
+  // ── Tool: simpson_paradox_test ──
+
+  server.tool(
+    "simpson_paradox_test",
+    "Test for Simpson's paradox: detect when the pooled (meta-analytic) association direction disagrees with the majority of cycle-specific estimates. This reveals ecological confounding — when secular trends in both exposure and outcome create a spurious pooled association that reverses at the individual level. Critical for interpreting PFAS-cholesterol, nutrient-outcome, and other time-varying associations.",
+    {
+      exposure: z.string().describe("Exposure variable (e.g., 'LBXPFOA', 'DR1TVD', or natural language)"),
+      phenotype: z.string().describe("Phenotype variable (e.g., 'LBXSCH', 'LBXGLU', or natural language)"),
+      model_number: z.number().optional().default(6).describe("Adjustment model (default 6: age+sex+ethnicity)"),
+    },
+    async ({ exposure, phenotype, model_number }) => {
+      // Resolve variables
+      const eRes = await ctx.resolver.resolve(exposure);
+      if (!eRes.resolved) {
+        return { content: [{ type: "text" as const, text: eRes.candidates ? `Ambiguous exposure "${exposure}". Candidates:\n${formatCandidates(eRes)}` : `Exposure "${exposure}" not found.` }] };
+      }
+      const pRes = await ctx.resolver.resolve(phenotype);
+      if (!pRes.resolved) {
+        return { content: [{ type: "text" as const, text: pRes.candidates ? `Ambiguous phenotype "${phenotype}". Candidates:\n${formatCandidates(pRes)}` : `Phenotype "${phenotype}" not found.` }] };
+      }
+
+      const eVar = eRes.variable!.variableName;
+      const pVar = pRes.variable!.variableName;
+      const model = model_number ?? 6;
+
+      try {
+        // 1. Get meta-analytic pooled estimate
+        const metaRows = await ctx.db.query(
+          `SELECT "estimate.uwls" as estimate, "p.value.uwls" as p_value,
+                  "i.squared.uwls" as i_squared, "k.uwls" as k
+           FROM pe_stats.adjusted_meta_uwls
+           WHERE expo_name = 'expo' AND evarname = $1 AND pvarname = $2
+             AND CAST(model_number AS INTEGER) = $3
+           LIMIT 1`,
+          eVar, pVar, model
+        );
+
+        if (metaRows.length === 0) {
+          return { content: [{ type: "text" as const, text: `No meta-analytic estimate found for ${eVar} → ${pVar} in model ${model}.` }] };
+        }
+
+        const meta = metaRows[0] as Record<string, unknown>;
+        const metaBeta = meta.estimate as number;
+        const metaP = meta.p_value as number;
+        const metaI2 = meta.i_squared as number;
+        const metaK = meta.k as number;
+        const metaDir = metaBeta > 0 ? "positive" : "negative";
+
+        // 2. Get cycle-specific estimates
+        const cycleRows = await ctx.db.query(
+          `SELECT series, estimate, "p.value" as p_value
+           FROM pe_stats.pe
+           WHERE exposure = $1 AND phenotype = $2
+             AND CAST(model_number AS INTEGER) = $3
+           ORDER BY series`,
+          eVar, pVar, model
+        );
+
+        const cycles: Array<{ series: string; cycle: string; estimate: number; p_value: number; direction: string }> = [];
+        let nSameSign = 0;
+        let nOppositeSign = 0;
+
+        for (const row of cycleRows as Array<Record<string, unknown>>) {
+          const est = row.estimate as number;
+          const dir = est > 0 ? "positive" : "negative";
+          const series = row.series as string;
+          cycles.push({
+            series,
+            cycle: CYCLE_LABELS[series] ?? series,
+            estimate: est,
+            p_value: row.p_value as number,
+            direction: dir,
+          });
+          if (dir === metaDir) nSameSign++;
+          else nOppositeSign++;
+        }
+
+        // 3. Detect Simpson's paradox
+        const totalCycles = nSameSign + nOppositeSign;
+        const paradoxDetected = totalCycles >= 3 && nOppositeSign > nSameSign;
+        const paradoxStrength = totalCycles > 0
+          ? nOppositeSign / totalCycles
+          : 0;
+
+        // 4. Compute ecological correlation (cycle-level means)
+        // Get mean exposure and outcome per cycle
+        let ecologicalR: number | null = null;
+        let ecologicalNote = "";
+
+        if (cycles.length >= 3) {
+          // Use the cycle-specific betas as a proxy — if all betas are similar
+          // but the meta-analytic is different, it's ecological confounding
+          const cycleBetas = cycles.map(c => c.estimate);
+          const meanCycleBeta = cycleBetas.reduce((a, b) => a + b, 0) / cycleBetas.length;
+
+          // Check if meta-analytic estimate is outside the range of cycle estimates
+          const minCycleBeta = Math.min(...cycleBetas);
+          const maxCycleBeta = Math.max(...cycleBetas);
+          const metaOutsideRange = metaBeta < minCycleBeta || metaBeta > maxCycleBeta;
+
+          if (paradoxDetected) {
+            ecologicalNote = `The pooled estimate (β=${metaBeta.toFixed(4)}) has opposite sign to ${nOppositeSign}/${totalCycles} cycle-specific estimates. This is Simpson's paradox — the between-cycle (ecological) trend reverses the within-cycle (individual) association. A lurking variable correlated with both ${eVar} and ${pVar} over time is likely responsible.`;
+          } else if (metaOutsideRange) {
+            ecologicalNote = `The pooled estimate (β=${metaBeta.toFixed(4)}) falls outside the range of cycle-specific estimates [${minCycleBeta.toFixed(4)}, ${maxCycleBeta.toFixed(4)}], suggesting ecological amplification even without a full sign reversal.`;
+          } else {
+            ecologicalNote = `The pooled estimate is consistent with the majority of cycle-specific estimates. No Simpson's paradox detected.`;
+          }
+        }
+
+        // 5. Classification
+        let classification: string;
+        if (paradoxDetected) {
+          classification = "SIMPSON_PARADOX";
+        } else if (paradoxStrength > 0.3 && paradoxStrength <= 0.5) {
+          classification = "BORDERLINE — substantial heterogeneity in direction across cycles";
+        } else {
+          classification = "CONSISTENT — pooled and cycle-specific estimates agree";
+        }
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              exposure: eVar,
+              phenotype: pVar,
+              exposure_description: eRes.variable!.description,
+              phenotype_description: pRes.variable!.description,
+              model: model,
+              meta_analytic: {
+                estimate: metaBeta,
+                p_value: metaP,
+                direction: metaDir,
+                i_squared: metaI2,
+                n_cycles: metaK,
+              },
+              cycle_specific: cycles,
+              paradox_test: {
+                classification,
+                paradox_detected: paradoxDetected,
+                n_concordant_cycles: nSameSign,
+                n_discordant_cycles: nOppositeSign,
+                discordance_fraction: totalCycles > 0 ? Math.round(100 * nOppositeSign / totalCycles) + "%" : "N/A",
+              },
+              interpretation: ecologicalNote,
+              recommendation: paradoxDetected
+                ? "WARNING: The pooled meta-analytic estimate may be misleading due to ecological confounding. Report cycle-specific estimates alongside the pooled estimate. Consider whether secular trends in the exposure or outcome explain the paradox."
+                : "The pooled estimate appears reliable — no evidence of Simpson's paradox.",
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error testing Simpson's paradox: ${(err as Error).message}` }] };
+      }
+    }
+  );
+
+  // ── Tool: secular_trend ──
+
+  server.tool(
+    "secular_trend",
+    "Show how an exposure-phenotype association or a variable's population distribution has changed across NHANES cycles (1999-2018). Returns cycle-by-cycle estimates with trend direction. Use this to detect temporal changes in exposure levels, health outcomes, or their associations.",
+    {
+      variable: z.string().describe("Variable to track over time (e.g., 'LBXPFOA', 'DR1TVD', 'LBXGH')"),
+      mode: z.enum(["association", "distribution"]).optional().default("distribution")
+        .describe("'distribution' = mean level per cycle; 'association' = beta for variable→phenotype per cycle"),
+      phenotype: z.string().optional()
+        .describe("Required if mode='association'. The phenotype to test against (e.g., 'LBXSCH' for cholesterol)"),
+      model_number: z.number().optional().default(6).describe("Adjustment model for association mode"),
+    },
+    async ({ variable, mode, phenotype, model_number }) => {
+      const vRes = await ctx.resolver.resolve(variable);
+      if (!vRes.resolved) {
+        return { content: [{ type: "text" as const, text: vRes.candidates ? `Ambiguous variable "${variable}". Candidates:\n${formatCandidates(vRes)}` : `Variable "${variable}" not found.` }] };
+      }
+      const varName = vRes.variable!.variableName;
+
+      if (mode === "association") {
+        if (!phenotype) {
+          return { content: [{ type: "text" as const, text: "phenotype is required when mode='association'." }] };
+        }
+        const pRes = await ctx.resolver.resolve(phenotype);
+        if (!pRes.resolved) {
+          return { content: [{ type: "text" as const, text: pRes.candidates ? `Ambiguous phenotype "${phenotype}". Candidates:\n${formatCandidates(pRes)}` : `Phenotype "${phenotype}" not found.` }] };
+        }
+        const pVar = pRes.variable!.variableName;
+
+        try {
+          const rows = await ctx.db.query(
+            `SELECT series, estimate, "p.value" as p_value
+             FROM pe_stats.pe
+             WHERE exposure = $1 AND phenotype = $2
+               AND CAST(model_number AS INTEGER) = $3
+             ORDER BY series`,
+            varName, pVar, model_number ?? 6
+          );
+
+          const trend = (rows as Array<Record<string, unknown>>).map(r => ({
+            series: r.series as string,
+            cycle: CYCLE_LABELS[r.series as string] ?? r.series,
+            estimate: r.estimate as number,
+            p_value: r.p_value as number,
+            direction: (r.estimate as number) > 0 ? "positive" : "negative",
+          }));
+
+          // Simple trend: compare first and last
+          let trendDirection = "stable";
+          if (trend.length >= 2) {
+            const first = trend[0].estimate;
+            const last = trend[trend.length - 1].estimate;
+            const change = last - first;
+            const pctChange = first !== 0 ? (100 * change / Math.abs(first)) : 0;
+            trendDirection = Math.abs(pctChange) < 10 ? "stable" : (change > 0 ? "increasing" : "decreasing");
+          }
+
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                exposure: varName,
+                phenotype: pVar,
+                exposure_description: vRes.variable!.description,
+                phenotype_description: pRes.variable!.description,
+                mode: "association",
+                n_cycles: trend.length,
+                trend_direction: trendDirection,
+                cycles: trend,
+              }, bigintReplacer, 2),
+            }],
+          };
+        } catch (err) {
+          return { content: [{ type: "text" as const, text: `Error computing trend: ${(err as Error).message}` }] };
+        }
+      } else {
+        // Distribution mode — get the variable as both exposure and itself
+        // Query from pe where this variable appears as an exposure against many phenotypes
+        // to infer its availability per cycle
+        try {
+          const rows = await ctx.db.query(
+            `SELECT series, COUNT(*) as n_associations,
+                    AVG(ABS(estimate)) as avg_abs_beta
+             FROM pe_stats.pe
+             WHERE exposure = $1 AND CAST(model_number AS INTEGER) = 6
+             GROUP BY series
+             ORDER BY series`,
+            varName
+          );
+
+          const trend = (rows as Array<Record<string, unknown>>).map(r => ({
+            series: r.series as string,
+            cycle: CYCLE_LABELS[r.series as string] ?? r.series,
+            n_associations: r.n_associations,
+            avg_abs_effect: r.avg_abs_beta,
+          }));
+
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                variable: varName,
+                description: vRes.variable!.description,
+                mode: "distribution_proxy",
+                note: "Shows cycles where this variable is available as an exposure and the average absolute effect size. For actual population means, use nhanes_trend tool.",
+                n_cycles: trend.length,
+                cycles: trend,
+              }, bigintReplacer, 2),
+            }],
+          };
+        } catch (err) {
+          return { content: [{ type: "text" as const, text: `Error computing trend: ${(err as Error).message}` }] };
+        }
+      }
+    }
+  );
+
+  // ── Tool: exposure_compare ──
+
+  server.tool(
+    "exposure_compare",
+    "Compare multiple exposures against the same phenotype in a single call. Returns a comparison table of effect sizes and p-values. Useful for comparing chemicals within a class (e.g., all PFAS → cholesterol) or nutrients against the same outcome.",
+    {
+      exposures: z.array(z.string()).min(2).max(20)
+        .describe("List of exposure variables to compare (e.g., ['LBXPFOA', 'LBXPFOS', 'LBXPFHS'])"),
+      phenotype: z.string().describe("Phenotype to test against (e.g., 'LBXSCH', 'LBXSUA', 'LBXGH')"),
+      model_number: z.number().optional().default(6).describe("Adjustment model"),
+    },
+    async ({ exposures, phenotype, model_number }) => {
+      const pRes = await ctx.resolver.resolve(phenotype);
+      if (!pRes.resolved) {
+        return { content: [{ type: "text" as const, text: pRes.candidates ? `Ambiguous phenotype "${phenotype}". Candidates:\n${formatCandidates(pRes)}` : `Phenotype "${phenotype}" not found.` }] };
+      }
+      const pVar = pRes.variable!.variableName;
+      const model = model_number ?? 6;
+
+      const results: Array<Record<string, unknown>> = [];
+
+      for (const exp of exposures) {
+        const eRes = await ctx.resolver.resolve(exp);
+        if (!eRes.resolved) {
+          results.push({ exposure: exp, status: "not_found" });
+          continue;
+        }
+        const eVar = eRes.variable!.variableName;
+
+        try {
+          const rows = await ctx.db.query(
+            `SELECT "estimate.uwls" as estimate, "p.value.uwls" as p_value,
+                    "i.squared.uwls" as i_squared, "k.uwls" as k
+             FROM pe_stats.adjusted_meta_uwls
+             WHERE expo_name = 'expo' AND evarname = $1 AND pvarname = $2
+               AND CAST(model_number AS INTEGER) = $3
+             LIMIT 1`,
+            eVar, pVar, model
+          );
+
+          if (rows.length > 0) {
+            const r = rows[0] as Record<string, unknown>;
+            results.push({
+              exposure: eVar,
+              exposure_description: eRes.variable!.description,
+              estimate: r.estimate,
+              p_value: r.p_value,
+              direction: (r.estimate as number) > 0 ? "positive" : "negative",
+              significant: Math.abs(r.p_value as number) < 0.05,
+              i_squared: r.i_squared,
+              n_cycles: r.k,
+            });
+          } else {
+            results.push({ exposure: eVar, exposure_description: eRes.variable!.description, status: "no_association_found" });
+          }
+        } catch {
+          results.push({ exposure: eVar, status: "query_error" });
+        }
+      }
+
+      // Sort by absolute effect size
+      results.sort((a, b) => {
+        const aEst = Math.abs((a.estimate as number) ?? 0);
+        const bEst = Math.abs((b.estimate as number) ?? 0);
+        return bEst - aEst;
+      });
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            phenotype: pVar,
+            phenotype_description: pRes.variable!.description,
+            model: MODEL_DESCRIPTIONS[model],
+            n_exposures_queried: exposures.length,
+            n_significant: results.filter(r => r.significant === true).length,
+            comparison: results,
+          }, bigintReplacer, 2),
+        }],
+      };
+    }
+  );
+
+  // ── Tool: confounder_check ──
+
+  server.tool(
+    "confounder_check",
+    "Check whether an exposure variable is correlated with known confounders (serum albumin, BMI, smoking/cotinine, socioeconomic proxies). Flags potential confounding in cross-sectional associations — critical for PFAS (albumin binding), metals (RBC partitioning), and urinary biomarkers (dilution). Returns correlation estimates with each confounder and warns which phenotype associations may be biased.",
+    {
+      exposure: z.string().describe("Exposure variable to check (e.g., 'LBXPFOA', 'LBXBPB', 'URXBPH')"),
+      model_number: z.number().optional().default(6).describe("Adjustment model"),
+    },
+    async ({ exposure, model_number }) => {
+      const eRes = await ctx.resolver.resolve(exposure);
+      if (!eRes.resolved) {
+        return { content: [{ type: "text" as const, text: eRes.candidates ? `Ambiguous exposure "${exposure}". Candidates:\n${formatCandidates(eRes)}` : `Exposure "${exposure}" not found.` }] };
+      }
+      const eVar = eRes.variable!.variableName;
+      const model = model_number ?? 6;
+
+      // Known confounders to check against
+      const confounders = [
+        { var: "LBXSAL", name: "Serum albumin", mechanism: "Protein binding — toxicants that bind albumin (PFAS, metals) will correlate positively with albumin, creating healthy-participant bias" },
+        { var: "BMXBMI", name: "BMI", mechanism: "Volume of distribution — lipophilic compounds concentrate in lean individuals; caloric intake correlates with all dietary exposures" },
+        { var: "LBXCOT", name: "Cotinine (smoking)", mechanism: "Smoking is associated with many exposures (cadmium, lead, PAHs) and many outcomes — a universal confounder" },
+        { var: "LBXSCR", name: "Creatinine", mechanism: "For urinary biomarkers: urinary dilution affects concentration. For serum: kidney function affects excretion of many chemicals" },
+        { var: "LBXHGB", name: "Hemoglobin", mechanism: "For blood metals: >95% of lead is in RBCs; higher hemoglobin = more RBCs = higher measured metal" },
+        { var: "LBXWBCSI", name: "WBC count", mechanism: "Immune/inflammatory status — confounds immune outcome associations" },
+        { var: "LBXCRP", name: "CRP", mechanism: "Acute phase response — inflammation affects albumin (negative), ferritin (positive), and many biomarkers" },
+        { var: "LBXTC", name: "Total cholesterol", mechanism: "Lipophilic partitioning — PFAS and other lipophilic compounds partition into lipid-rich compartments" },
+      ];
+
+      const checks: Array<Record<string, unknown>> = [];
+      const warnings: string[] = [];
+
+      for (const conf of confounders) {
+        try {
+          const rows = await ctx.db.query(
+            `SELECT "estimate.uwls" as estimate, "p.value.uwls" as p_value
+             FROM pe_stats.adjusted_meta_uwls
+             WHERE expo_name = 'expo' AND evarname = $1 AND pvarname = $2
+               AND CAST(model_number AS INTEGER) = $3
+             LIMIT 1`,
+            eVar, conf.var, model
+          );
+
+          if (rows.length > 0) {
+            const r = rows[0] as Record<string, unknown>;
+            const beta = r.estimate as number;
+            const pval = r.p_value as number;
+            const significant = Math.abs(pval) < 0.05;
+            const strong = Math.abs(pval) < 0.001;
+
+            checks.push({
+              confounder: conf.name,
+              confounder_var: conf.var,
+              beta,
+              p_value: pval,
+              direction: beta > 0 ? "positive" : "negative",
+              significant,
+              strong_association: strong,
+              mechanism: conf.mechanism,
+            });
+
+            if (strong) {
+              const dir = beta > 0 ? "positively" : "negatively";
+              warnings.push(`${conf.name}: ${eVar} is strongly ${dir} associated with ${conf.name} (β=${beta.toFixed(4)}, p=${pval.toExponential(2)}). ${conf.mechanism}`);
+            }
+          }
+        } catch {
+          // skip if query fails
+        }
+      }
+
+      // Classify the exposure
+      const isSerum = eVar.startsWith("LBX");
+      const isUrinary = eVar.startsWith("URX");
+      const isDietary = eVar.startsWith("DR1") || eVar.startsWith("DR2") || eVar.startsWith("DRX");
+
+      let exposureType = "unknown";
+      let specificWarning = "";
+      if (isDietary) {
+        exposureType = "dietary_recall";
+        specificWarning = "Dietary recall variables are highly correlated with total caloric intake and dietary patterns. All DR1T* variables show ~8,000+ significant associations — most reflect dietary confounding, not specific nutrient effects. Consider using serum biomarkers instead.";
+      } else if (isUrinary) {
+        exposureType = "urinary_biomarker";
+        specificWarning = "Urinary biomarkers are affected by dilution (urine concentration). Check creatinine association — if positive, consider creatinine-adjusted analyses.";
+      } else if (isSerum) {
+        exposureType = "serum_biomarker";
+        specificWarning = "Serum biomarkers may be affected by protein binding (check albumin) and lipid partitioning (check cholesterol).";
+      }
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            exposure: eVar,
+            exposure_description: eRes.variable!.description,
+            exposure_type: exposureType,
+            exposure_type_warning: specificWarning,
+            n_confounders_checked: checks.length,
+            n_strong_associations: checks.filter(c => c.strong_association).length,
+            confounder_associations: checks,
+            warnings,
+            recommendation: warnings.length > 0
+              ? `WARNING: ${eVar} has ${warnings.length} strong confounder association(s). Associations between ${eVar} and health outcomes may be partially or fully confounded. Consider adjusting for these confounders or using triangulation (CTD, HHEAR, RCT) to validate findings.`
+              : `No strong confounder associations detected for ${eVar}. Observational associations are less likely to be confounded.`,
+          }, bigintReplacer, 2),
+        }],
+      };
+    }
+  );
+
+  // ── Tool: guideline_compare ──
+
+  server.tool(
+    "guideline_compare",
+    "Compare a nutrient's intake level against US Dietary Reference Intakes (DRI) and the 2025-2030 Dietary Guidelines for Americans. Returns the RDA/AI/UL thresholds, current population intake from NHANES, percentage of DRI met, secular trend, and RCT evidence for the guideline-relevant outcomes.",
+    {
+      nutrient: z.string().describe("Nutrient name (e.g., 'vitamin D', 'calcium', 'sodium', 'fiber')"),
+    },
+    async ({ nutrient }) => {
+      const resolved = resolveNutrient(nutrient);
+      if (!resolved) {
+        const available = [...new Set(Object.values(NUTRIENT_VARS).map(v => v.name))];
+        return { content: [{ type: "text" as const, text: `Nutrient "${nutrient}" not found. Available: ${available.join(", ")}` }] };
+      }
+
+      // DRI reference values (adults 19-50, averaged M/F where appropriate)
+      const DRI_TABLE: Record<string, { rda: string; rda_value: number; ul: string; unit: string; dga_status: string }> = {
+        "Vitamin D":   { rda: "15 mcg (600 IU)", rda_value: 15, ul: "100 mcg (4000 IU)", unit: "mcg", dga_status: "Underconsumption concern" },
+        "Calcium":     { rda: "1000 mg", rda_value: 1000, ul: "2500 mg", unit: "mg", dga_status: "Underconsumption concern" },
+        "Potassium":   { rda: "2600-3400 mg (AI)", rda_value: 3000, ul: "ND", unit: "mg", dga_status: "Underconsumption concern" },
+        "Fiber":       { rda: "25-38 g (AI)", rda_value: 30, ul: "ND", unit: "g", dga_status: "Underconsumption concern" },
+        "Sodium":      { rda: "1500 mg (AI)", rda_value: 2300, ul: "2300 mg (CDRR)", unit: "mg", dga_status: "Overconsumption concern" },
+        "Iron":        { rda: "8-18 mg", rda_value: 13, ul: "45 mg", unit: "mg", dga_status: "Generally adequate" },
+        "Folic acid":  { rda: "400 mcg DFE", rda_value: 400, ul: "1000 mcg", unit: "mcg", dga_status: "Adequate (fortification)" },
+        "Vitamin C":   { rda: "75-90 mg", rda_value: 82.5, ul: "2000 mg", unit: "mg", dga_status: "Generally adequate (declining)" },
+        "Vitamin E":   { rda: "15 mg", rda_value: 15, ul: "1000 mg", unit: "mg", dga_status: "Borderline adequate" },
+        "Vitamin A":   { rda: "700-900 mcg RAE", rda_value: 800, ul: "3000 mcg", unit: "mcg RAE", dga_status: "Generally adequate" },
+        "Vitamin K":   { rda: "90-120 mcg (AI)", rda_value: 105, ul: "ND", unit: "mcg", dga_status: "Generally adequate" },
+        "Vitamin B12": { rda: "2.4 mcg", rda_value: 2.4, ul: "ND", unit: "mcg", dga_status: "Concern in elderly" },
+        "Magnesium":   { rda: "310-420 mg", rda_value: 365, ul: "350 mg (suppl only)", unit: "mg", dga_status: "Borderline adequate" },
+        "Zinc":        { rda: "8-11 mg", rda_value: 9.5, ul: "40 mg", unit: "mg", dga_status: "Generally adequate" },
+        "Selenium":    { rda: "55 mcg", rda_value: 55, ul: "400 mcg", unit: "mcg", dga_status: "Generally adequate" },
+        "Omega-3":     { rda: "250-500 mg (AI, no formal RDA)", rda_value: 0.25, ul: "ND", unit: "g", dga_status: "Underconsumption concern" },
+        "Omega-3 (DHA)": { rda: "250-500 mg (AI)", rda_value: 0.25, ul: "ND", unit: "g", dga_status: "Underconsumption concern" },
+        "Omega-3 (EPA)": { rda: "250-500 mg (AI)", rda_value: 0.25, ul: "ND", unit: "g", dga_status: "Underconsumption concern" },
+      };
+
+      const dri = DRI_TABLE[resolved.name];
+      if (!dri) {
+        return { content: [{ type: "text" as const, text: `No DRI data available for ${resolved.name}.` }] };
+      }
+
+      // Get RCT evidence
+      const rctMatches = NUTRIENT_RCT_DATA.filter(r => {
+        const rName = r.nutrient?.toLowerCase() ?? "";
+        const qName = resolved.name.toLowerCase();
+        return rName.startsWith(qName) || rName.includes(qName);
+      });
+
+      // Get EP-WAS association count
+      let epwasCount = 0;
+      try {
+        const countRow = await ctx.db.query(
+          `SELECT COUNT(*) as n FROM pe_stats.adjusted_meta_uwls
+           WHERE expo_name = 'expo' AND evarname = $1
+             AND CAST(model_number AS INTEGER) = 6 AND ABS("p.value.uwls") < 0.05`,
+          resolved.dietary
+        );
+        epwasCount = (countRow[0] as Record<string, unknown>).n as number;
+      } catch { /* skip */ }
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            nutrient: resolved.name,
+            nhanes_variable: resolved.dietary,
+            biomarker_variable: resolved.biomarker ?? null,
+            dietary_reference_intakes: {
+              rda_ai: dri.rda,
+              rda_value_numeric: dri.rda_value,
+              tolerable_upper_limit: dri.ul,
+              unit: dri.unit,
+            },
+            dga_2025_2030_status: dri.dga_status,
+            rct_evidence: {
+              n_outcomes: rctMatches.length,
+              biomarker_outcomes: rctMatches.filter(r => r.outcome_type === "biomarker").length,
+              clinical_endpoints: rctMatches.filter(r => r.outcome_type === "clinical_endpoint").length,
+              key_findings: rctMatches.slice(0, 5).map(r => ({
+                outcome: r.outcome,
+                effect: `${r.effect_measure}=${r.effect_estimate}`,
+                direction: r.direction,
+                source: r.source_ref,
+              })),
+            },
+            epwas_associations: {
+              n_significant_p05: epwasCount,
+              note: "Number of phenotypes significantly associated with this nutrient's dietary intake (model 6, p<0.05)",
+            },
+            note: "DRI values are for adults 19-50 (averaged across males and females where ranges differ). Population intake estimates require running nhanes_mean on the DR1T* variable.",
+          }, bigintReplacer, 2),
+        }],
+      };
+    }
+  );
+
+  console.error(`[exposomeql] Registered 46 tools (6 Class 1, 5 Class 2, 6 Class 3, 9 HHEAR, 1 Chemical, 5 CTD, 4 Cross-cutting, 5 Nutrient, 3 Diagnostics, 2 Evidence)`);
 }
 
 /** Find a cohort config by ID */

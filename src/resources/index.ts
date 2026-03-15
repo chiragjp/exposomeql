@@ -465,5 +465,236 @@ Nucleic Acids Research, 2025, 53(D1):D1328-D1338.
     })
   );
 
-  console.error("[exposomeql] Registered 12 resources");
+  // ─── Missing resources (5 new) ──────────────────────────────────
+
+  // 1. EP-WAS catalog metadata
+  server.resource(
+    "epwas-catalog-metadata",
+    "epwas://catalog/metadata",
+    async (uri) => ({
+      contents: [{
+        uri: uri.href,
+        mimeType: "application/json" as const,
+        text: JSON.stringify({
+          database: "pe_summary_stats_01_2025.sqlite",
+          description: "Pre-computed exposure-phenotype (PE) and exposure-exposure (EE) association atlas from NHANES 1999-2018",
+          pe_associations: "66.8 million (804 exposures × 346 phenotypes × 9 models × ~10 cycles)",
+          ee_associations: "33.3 million (exposure-exposure correlations)",
+          meta_analytic_tests: "165,342 (model 6, UWLS pooled across cycles)",
+          cycles: "A (1999-2000) through J (2017-2018)",
+          models: 9,
+          method: "Survey-weighted linear regression, exposure log10-transformed and z-scored",
+          meta_analysis: "UWLS (uncertainty-weighted least squares) across cycles",
+          tables: {
+            pe: "Cycle-specific estimates (exposure, phenotype, estimate, p.value, series, model_number)",
+            adjusted_meta_uwls: "Meta-analytic pooled estimates (evarname, pvarname, estimate.uwls, p.value.uwls, i.squared.uwls, k.uwls)",
+            variable_names_epcf: "Variable codebook (Variable.Name, Variable.Description, Data.File.Name, Begin.Year, EndYear, Component)",
+            variable_domain: "Variable domain classification (exposure vs phenotype, category, subcategory)",
+          },
+          bonferroni_threshold: "3.02e-07 (0.05 / 165,342)",
+        }, null, 2),
+      }],
+    })
+  );
+
+  // 2. Variables in a specific NHANES cycle
+  server.resource(
+    "nhanes-cycle-variables",
+    new ResourceTemplate("nhanes://cycles/{cycle}/variables", { list: undefined }),
+    async (uri, variables) => {
+      const cycle = variables.cycle as string;
+      // Map cycle year range to series letter
+      const yearToSeries: Record<string, string> = {
+        "1999-2000": "A", "2001-2002": "B", "2003-2004": "C", "2005-2006": "D",
+        "2007-2008": "E", "2009-2010": "F", "2011-2012": "G", "2013-2014": "H",
+        "2015-2016": "I", "2017-2018": "J",
+      };
+      const series = yearToSeries[cycle] ?? cycle.toUpperCase();
+
+      try {
+        const rows = await ctx.db.query(`
+          SELECT DISTINCT "Variable.Name" as variable, "Variable.Description" as description,
+                 "Data.File.Name" as data_file, "Component" as component
+          FROM nhanes.variable_names_epcf
+          WHERE "Begin.Year" <= $1 AND "EndYear" >= $2
+          ORDER BY "Component", "Variable.Name"
+          LIMIT 500
+        `, ...(cycle.includes("-") ? [parseInt(cycle.split("-")[0]), parseInt(cycle.split("-")[1])] : [2000, 2000]));
+
+        return {
+          contents: [{
+            uri: uri.href,
+            mimeType: "application/json" as const,
+            text: JSON.stringify({
+              cycle,
+              series,
+              n_variables: rows.length,
+              variables: rows,
+              note: rows.length >= 500 ? "Results truncated to 500. Use component filter for full listing." : undefined,
+            }, null, 2),
+          }],
+        };
+      } catch (err) {
+        return {
+          contents: [{
+            uri: uri.href,
+            mimeType: "text/plain" as const,
+            text: `Error querying cycle ${cycle}: ${(err as Error).message}`,
+          }],
+        };
+      }
+    }
+  );
+
+  // 3. LOD handling best practices
+  server.resource(
+    "nhanes-guidelines-lod",
+    "nhanes://guidelines/lod",
+    async (uri) => ({
+      contents: [{
+        uri: uri.href,
+        mimeType: "text/markdown" as const,
+        text: `# Limit of Detection (LOD) Handling in NHANES
+
+## What is LOD?
+The limit of detection is the lowest concentration of an analyte that can be reliably measured by the laboratory method. Values below LOD are reported as below the detection threshold.
+
+## How NHANES Reports LOD
+- Laboratory variables (LBX*, URX*) have companion comment code columns (LBD*LC, URD*LC)
+- Comment code = 0: at or above LOD (use the measured value)
+- Comment code = 1: below LOD (the reported value is LOD/sqrt(2))
+
+## ExposomeQL LOD Handling
+ExposomeQL automatically:
+1. Checks for LOD comment codes on all laboratory biomarker variables
+2. Counts the percentage of observations below LOD
+3. Warns when >40% of values are below LOD (estimates may be unreliable)
+4. Uses the LOD/sqrt(2) substituted values provided by NCHS (standard approach)
+
+## When LOD Matters
+- **Environmental chemicals** (metals, PFAS, phthalates, phenols) frequently have high %<LOD
+- **Blood biomarkers** (cholesterol, glucose, HbA1c) are almost never below LOD
+- **Urinary biomarkers** are more likely to have LOD issues than serum biomarkers
+
+## Best Practices
+1. Always report %<LOD alongside any biomarker estimate
+2. Be cautious interpreting results when >40% below LOD
+3. Consider sensitivity analyses with different LOD substitution methods
+4. For ExWAS: LOD-affected variables may have attenuated associations
+
+## Reference
+NCHS Analytic Guidelines, 2013 (updated 2018):
+https://wwwn.cdc.gov/nchs/nhanes/analyticguidelines.aspx
+`,
+      }],
+    })
+  );
+
+  // 4. LOD values by variable
+  server.resource(
+    "nhanes-lod-variable",
+    new ResourceTemplate("nhanes://lod/{variable}", { list: undefined }),
+    async (uri, variables) => {
+      const varName = (variables.variable as string).toUpperCase();
+      // LOD comment code column naming convention: LBD{stem}LC or URD{stem}LC
+      const stem = varName.replace(/^(LBX|URX)/, "");
+      const commentCodes = [`LBD${stem}LC`, `URD${stem}LC`];
+
+      // Try to find LOD info from the data
+      let lodInfo: Record<string, unknown> = { variable: varName, lod_data: "not_available" };
+
+      try {
+        // Check if this variable has a comment code in the variable names table
+        for (const cc of commentCodes) {
+          const rows = await ctx.db.query(`
+            SELECT DISTINCT "Variable.Name", "Variable.Description", "Begin.Year", "EndYear"
+            FROM nhanes.variable_names_epcf
+            WHERE "Variable.Name" = '${cc}'
+            ORDER BY "Begin.Year"
+          `);
+          if (rows.length > 0) {
+            lodInfo = {
+              variable: varName,
+              comment_code_variable: cc,
+              description: (rows[0] as Record<string, unknown>)["Variable.Description"],
+              cycles_available: rows.map((r: Record<string, unknown>) =>
+                `${r["Begin.Year"]}-${r["EndYear"]}`
+              ),
+              note: "Comment code 0 = at/above LOD, 1 = below LOD. Values below LOD are reported as LOD/sqrt(2).",
+            };
+            break;
+          }
+        }
+      } catch {
+        // fall through
+      }
+
+      return {
+        contents: [{
+          uri: uri.href,
+          mimeType: "application/json" as const,
+          text: JSON.stringify(lodInfo, null, 2),
+        }],
+      };
+    }
+  );
+
+  // 5. Pre-defined subpopulations
+  server.resource(
+    "nhanes-subpopulations",
+    "nhanes://subpopulations",
+    async (uri) => ({
+      contents: [{
+        uri: uri.href,
+        mimeType: "application/json" as const,
+        text: JSON.stringify({
+          description: "Pre-defined subgroup filter expressions for common NHANES subpopulations. Use these with the 'subgroup' parameter in descriptive tools.",
+          subpopulations: {
+            age_groups: {
+              "Children (<6)": "RIDAGEYR < 6",
+              "Children (6-11)": "RIDAGEYR >= 6 & RIDAGEYR < 12",
+              "Adolescents (12-17)": "RIDAGEYR >= 12 & RIDAGEYR < 18",
+              "Adults (18-64)": "RIDAGEYR >= 18 & RIDAGEYR < 65",
+              "Older adults (65+)": "RIDAGEYR >= 65",
+              "Reproductive age women (15-44)": "RIDAGEYR >= 15 & RIDAGEYR <= 44 & RIAGENDR == 2",
+            },
+            sex: {
+              "Males": "RIAGENDR == 1",
+              "Females": "RIAGENDR == 2",
+            },
+            race_ethnicity: {
+              "Mexican American": "RIDRETH3 == 1",
+              "Other Hispanic": "RIDRETH3 == 2",
+              "Non-Hispanic White": "RIDRETH3 == 3",
+              "Non-Hispanic Black": "RIDRETH3 == 4",
+              "Non-Hispanic Asian": "RIDRETH3 == 6",
+              "Other/Multi-Racial": "RIDRETH3 == 7",
+            },
+            income: {
+              "Below poverty line (PIR < 1.0)": "INDFMPIR < 1",
+              "Low income (PIR 1.0-1.99)": "INDFMPIR >= 1 & INDFMPIR < 2",
+              "Middle income (PIR 2.0-3.99)": "INDFMPIR >= 2 & INDFMPIR < 4",
+              "High income (PIR >= 4.0)": "INDFMPIR >= 4",
+            },
+            smoking_status: {
+              "Current smokers (cotinine > 10 ng/mL)": "LBXCOT > 10",
+              "Secondhand smoke exposed (cotinine 0.05-10)": "LBXCOT >= 0.05 & LBXCOT <= 10",
+              "Non-exposed (cotinine < 0.05)": "LBXCOT < 0.05",
+            },
+            clinical: {
+              "Obese (BMI >= 30)": "BMXBMI >= 30",
+              "Overweight (BMI 25-29.9)": "BMXBMI >= 25 & BMXBMI < 30",
+              "Normal weight (BMI 18.5-24.9)": "BMXBMI >= 18.5 & BMXBMI < 25",
+              "Diabetic (HbA1c >= 6.5%)": "LBXGH >= 6.5",
+              "Prediabetic (HbA1c 5.7-6.4%)": "LBXGH >= 5.7 & LBXGH < 6.5",
+              "Hypertensive (SBP >= 140)": "BPXSY1 >= 140",
+            },
+          },
+          note: "These expressions use NHANES variable codes. Not all variables are available in all cycles. Combine with & for intersections (e.g., 'RIDAGEYR < 6 & RIAGENDR == 2' for female children under 6).",
+        }, null, 2),
+      }],
+    })
+  );
+
+  console.error("[exposomeql] Registered 17 resources");
 }

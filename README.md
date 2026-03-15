@@ -1,65 +1,104 @@
 # ExposomeQL
 
-An MCP server for conducting and interpreting Exposome-Wide Association Studies (ExWAS). ExposomeQL gives LLMs structured, guardrailed access to NHANES biomonitoring data, 66 million pre-computed exposure-phenotype associations, HHEAR multi-cohort data, and the Comparative Toxicogenomics Database (CTD) — enabling researchers to go from statistical association to mechanistic hypothesis in seconds.
+A primary data agent for environmental epidemiology. ExposomeQL is an MCP server that gives AI agents structured, guardrailed access to population health data — 66 million pre-computed exposure-phenotype associations, NHANES survey microdata, CTD toxicogenomics, HHEAR multi-cohort biomonitoring, and curated RCT evidence — enabling researchers to go from question to triangulated evidence report in seconds.
 
-## What ExposomeQL Does
+**46 tools. 17 resources. 6 guardrail systems. 66ms per query.**
 
-ExposomeQL is built for three core workflows:
+## Why ExposomeQL?
 
-### 1. Conduct ExWAS
-Run survey-weighted exposome-wide association studies on NHANES data, or query 66 million pre-computed associations across 9 adjustment models. Compare results across cohorts using HHEAR data from 35+ global studies.
+70-90% of chronic disease risk is environmental, yet no AI infrastructure existed for exposomics. ExposomeQL fills this gap.
 
-### 2. Interpret ExWAS Results
-The `ctd_triangulate` tool links epidemiological findings to biological mechanisms using three independent evidence streams. Given an exposure, it:
-- Retrieves significant EP-WAS phenotype associations from NHANES (meta-analyzed, fully adjusted)
-- Pulls exposure levels from HHEAR cohorts that measured the same chemical (independent replication)
-- Categorizes associations by biological system (lipid metabolism, hepatic function, immune, etc.)
-- Queries CTD for curated gene interactions with directionality (increases/decreases expression, binds, inhibits)
-- Generates directional hypotheses: **exposure → gene mechanism → phenotype**
+Unlike literature synthesis agents (Elicit, Consensus, Semantic Scholar) that search *what researchers wrote*, ExposomeQL queries *what the data shows* — with proper epidemiological methods (survey weights, LOD handling, meta-analysis, multiple testing correction) that a general-purpose agent cannot improvise.
 
-### 3. Contextualize Exposure Levels
-Compute population reference ranges, compare to regulatory thresholds (CDC, WHO, German HBM), and evaluate exposure distributions across cohorts and demographic groups.
+Unlike molecular biology agents (Biomni, BioMCP) that handle genomics and drug discovery, ExposomeQL handles the environmental side of the G×E equation — the same way Biomni handles the G.
+
+### What it can do that no other agent can
+
+1. **"Is PFOA associated with cholesterol, adjusted for age/sex/race, meta-analyzed across 10 NHANES cycles?"** → β=+0.061, p=0.049 in 63ms
+2. **"Does this association show Simpson's paradox?"** → YES: pooled positive, within-cycle negative — ecological confounding detected
+3. **"Is the dietary recall evidence for iron trustworthy?"** → 0% concordance with RCTs (fully confounded); serum biomarker achieves 83%
+4. **"Which of 9 PFAS compounds affects uric acid most?"** → PFOA (β=+0.111) via SLC22A11/ABCG2 renal transporter inhibition (9 CTD interactions)
+5. **"Run a dose-response analysis of lead vs kidney function using restricted cubic splines"** → Executes R code on NHANES microdata with proper survey weights
+
+### Validation
+
+- **92% directional accuracy** against 24 established exposure-health findings from the literature
+- **79% nominally significant**, **67% BH-FDR significant**, **17% Bonferroni significant** (across 165,342 meta-analytic tests)
+- **66ms mean query time** per association lookup
+
+## Quick Start
+
+```bash
+git clone https://github.com/chiragjp/exposomeql
+cd exposomeql
+npm install
+npm run build
+
+# Set up data (requires NHANES/EP-WAS databases)
+bash scripts/setup-local-data.sh /path/to/nhanespewas/db
+
+# Test
+npm run typecheck    # compile check
+npm test             # smoke test (starts server, runs queries)
+```
+
+### MCP Client Configuration
+
+```json
+{
+  "mcpServers": {
+    "exposomeql": {
+      "command": "node",
+      "args": ["/path/to/exposomeql/dist/index.js"],
+      "env": {
+        "EXPOSOMEQL_DATA_DIR": "/path/to/data",
+        "HHEAR_DATA_DIR": "/path/to/hhear-data"
+      }
+    }
+  }
+}
+```
 
 ## Example: PFOA Triangulation
 
 ```
 User: "What are the health effects of PFOA and why?"
 
-ExposomeQL calls ctd_triangulate("PFOA"):
+→ ctd_triangulate(exposure: "PFOA")
 
-EP-WAS (NHANES population-level, N~100K):
-  Lipid Metabolism:    ↑Cholesterol (β=0.064), ↑Triglycerides (β=0.037)
-  Hepatic Function:    ↑ALT (β=0.051), ↑Albumin (β=0.176)
-  Uric Acid:           ↑Uric acid (β=0.111, p=1e-16)
-  Immune:              ↑Lymphocytes (β=0.079), ↓Neutrophils (β=-0.070)
+EP-WAS (NHANES, N~100K, meta-analyzed across 5 cycles):
+  Lipid:    ↑Cholesterol (β=0.061), ↑Albumin (β=0.177)
+  Kidney:   ↑Uric acid (β=0.111, p=7.6e-5)
+  Immune:   ↑Lymphocytes (β=0.084), ↓Neutrophils (β=-0.084)
 
-HHEAR (independent cohort replication):
-  5 cohorts measured PFOA across 3 countries
-  Median serum levels: 1.2–4.8 ng/mL (children), 2.1–6.3 ng/mL (adults)
-  Cross-cohort exposure characterization confirms widespread detection
+CTD (gene mechanisms, 9,656 PFOA interactions):
+  PPARα:     284 interactions → hepatic lipid metabolism
+  ALB:       13 interactions → protein binding (confounder!)
+  SLC22A11:  9 interactions → renal urate transport
+  ABCG2:     7 interactions → urate efflux
 
-CTD (gene-level mechanisms):
-  Lipid:    PFOA binds PPARα (26 interactions) → ↓HMGCR, ↓LDLR, ↓APOB
-  Uric:     PFOA inhibits SLC22A11 (9 interactions) → ↓renal urate clearance
-  Immune:   PFOA ↓TNF/IL1B secretion via PPARα → suppressed innate immunity
-  Hepatic:  PFOA binds albumin, activates NR1I2/PXR → hepatocyte stress
-
-Directional hypothesis:
-  PFOA binds PPARα → disrupted hepatic lipid metabolism → ↑serum cholesterol
-  PFOA inhibits SLC22A11/ABCG2 → ↓renal uric acid excretion → hyperuricemia
-  PFOA ↓TNF/IL1B via PPARα → ↓innate immunity → lymphocyte/neutrophil shift
+Simpson's paradox detected for PFOA→cholesterol:
+  Pooled: β=+0.061 (positive)
+  Within-cycle: β≈-0.20 (negative in all 5 cycles)
+  Explanation: PFAS declining over time + statin use increasing
 ```
 
-## Architecture
+## Example: Nutrient Evidence Triangulation
 
 ```
-LLM Client → MCP Protocol (stdio) → ExposomeQL Server
-                                       ├─ DuckDB (EP-WAS: 66M+ associations, CTD: 1.3M records)
-                                       ├─ R subprocess (survey-weighted statistics)
-                                       ├─ Variable Resolver (Fuse.js, 14,464 NHANES variables)
-                                       ├─ CTD Chemical Map (326 chemicals → gene/disease/pathway)
-                                       ├─ CompTox Identity (54 chemicals, CAS/DTXSID/thresholds)
-                                       └─ Guardrails (weights, LOD, cell size, multiple testing)
+User: "How well do observational dietary studies agree with RCTs?"
+
+→ nutrient_concordance_summary()
+
+Overall: 61% concordance (dietary recall vs RCT direction)
+Biomarker exposures: 83% concordance
+
+Per nutrient:
+  Magnesium: 86% | Vitamin D: 80% | Fiber: 80% | Vitamin C: 100%
+  Iron: 0% (fully confounded) | Omega-3: 0% (dietary pattern bias)
+
+Key finding: dietary recall is equivalent to a coin flip (50%)
+for predicting RCT-established causal effects.
 ```
 
 ## Data Sources
@@ -68,149 +107,128 @@ LLM Client → MCP Protocol (stdio) → ExposomeQL Server
 |-------|--------|-------|
 | Population biomonitoring | NHANES 1999-2018 (10 cycles) | 14,464 variables, ~100K participants |
 | Association atlas | EP-WAS pre-computed results | 66.8M PE + 33.3M EE associations |
-| Cohort biomonitoring | HHEAR consortium | 35+ cohorts, 9,664 children + 11,764 adults |
-| Toxicogenomics | CTD (Comparative Toxicogenomics Database) | 415K gene interactions, 607K disease associations, 59K pathways |
-| Chemical identity | EPA CompTox Dashboard | 54 chemicals with CAS, DTXSID, IARC, ToxCast |
-| Chemical mapping | CTD MeSH crosswalk | 326 chemicals (404 NHANES vars + 150 HHEAR analytes) |
-| Biomarker thresholds | CDC, German HBM, WHO, NASEM | 21 thresholds across 8 chemicals |
+| Cohort biomonitoring | HHEAR consortium | 35+ cohorts, 21K+ participants |
+| Toxicogenomics | CTD | 415K gene interactions, 607K disease associations |
+| Chemical identity | EPA CompTox Dashboard | 54 chemicals with CAS, DTXSID, thresholds |
+| Chemical mapping | CTD MeSH crosswalk | 326 chemicals across all data sources |
+| Nutrient RCT evidence | Cochrane + high-impact meta-analyses | 64 nutrient-outcome pairs, 17 nutrients |
+| Dietary guidelines | IOM/NASEM DRI, DGA 2025-2030 | RDA/AI/UL for 16 nutrients |
 
-## Tools (36)
+## Tools (46)
 
 ### Descriptive Statistics (6)
-Survey-weighted mean, prevalence, quantile, count, trend, and distribution with automatic weight selection and NCHS-compliant variance estimation.
+`nhanes_mean` · `nhanes_prevalence` · `nhanes_distribution` · `nhanes_quantile` · `nhanes_count` · `nhanes_trend`
 
-### Conditional & Exploratory Analysis (5)
-Conditional analysis, crosstabulation, stratification, correlation, and group comparison — all design-corrected (Rao-Scott, not naive tests).
-
-### Regression & Modeling (7)
-Linear, logistic, dose-response, mediation, interaction, prediction, and on-the-fly ExWAS — all survey-weighted via R subprocess.
+### Bivariate Analysis (5)
+`nhanes_conditional` · `nhanes_crosstab` · `nhanes_stratify` · `nhanes_correlation` · `nhanes_compare_groups`
 
 ### EP-WAS Association Search (6)
-Query the 66.8M pre-computed association atlas by exposure or phenotype. Vibration of effects across 9 adjustment models. Meta-analysis with heterogeneity statistics.
+`epwas_search` · `epwas_summary` · `epwas_phenotype_profile` · `epwas_vibration` · `nhanes_analyze` · `nhanes_exwas`
 
-### HHEAR Cohort Analytics (8)
-Cohort-level means, quantile regression ExWAS, demographic models, cross-cohort comparison, cumulative exposure scoring, and exposure intervals with NHANES bridging.
+### Regression & Modeling (7)
+`nhanes_model` · `nhanes_dose_response` · `nhanes_interaction` · `nhanes_mediation` · `nhanes_predict` · `nhanes_validate` · `nhanes_interaction`
 
-### Chemical Identity (1)
-Multi-identifier resolution (name, CAS, DTXSID, NHANES code, HHEAR code) returning regulatory context, biomarker thresholds, and ToxCast annotations.
+### HHEAR Cohort Analytics (9)
+`cohort_list` · `cohort_variables` · `cohort_mean` · `cohort_exposure_intervals` · `cohort_demographic_model` · `cohort_exwas` · `cross_cohort_compare` · `cohort_cumulative_score` · `nhanes_hhear_bridge`
 
-### CTD Toxicogenomics (5)
-- `ctd_chemical_genes` — Curated gene interactions with directionality
-- `ctd_chemical_diseases` — Disease associations (curated + inferred)
-- `ctd_chemical_pathways` — Enriched KEGG/Reactome pathways
-- `ctd_chemical_go` — Enriched Gene Ontology terms
-- `ctd_triangulate` — **Three-source triangulation: NHANES EP-WAS (population associations) + HHEAR cohorts (independent exposure levels) + CTD (gene mechanisms) → directional hypotheses linking exposure → gene → phenotype**
+### Chemical & CTD Toxicogenomics (6)
+`chemical_info` · `ctd_chemical_genes` · `ctd_chemical_diseases` · `ctd_chemical_pathways` · `ctd_chemical_go` · `ctd_triangulate`
 
-### Cross-Cutting Tools (4)
-- `cohort_chemical_availability` — Find which HHEAR cohorts measured a given chemical, with summary statistics and cohort metadata
-- `cohort_outcome_associations` — Phenotype-wide scan: test one exposure against ALL outcomes in a cohort's epi data (e.g., arsenic × birth weight, gestational age, BMI)
-- `epwas_reverse_triangulate` — **Phenotype-first triangulation**: start from a health outcome, find top exposure associations, then pull CTD mechanisms and HHEAR availability for each
-- `exposure_profile` — **Personalized exposure contextualization**: given a chemical + demographic profile (age, sex, race/ethnicity, BMI), compute population and subgroup NHANES distributions, then interpret top EP-WAS associations at the individual's expected exposure level with regulatory threshold comparison
+### Cross-Cutting (4)
+`cohort_chemical_availability` · `cohort_outcome_associations` · `epwas_reverse_triangulate` · `exposure_profile`
 
-## Resources (12)
+### Nutrient Triangulation (5)
+`nutrient_rct_evidence` · `nutrient_phenotype_associations` · `nutrient_triangulate` · `nutrient_biomarker_vs_dietary` · `nutrient_concordance_summary`
 
-- NHANES codebook lookup and search
-- NHANES cycle inventory
-- NCHS survey design guidelines and weight selection guide
-- EP-WAS exposure/phenotype catalogs, methodology, and vibration of effects documentation
-- CompTox chemical profiles (`comptox://chemical/{identifier}`)
-- CTD chemical profiles (`ctd://chemical/{identifier}`)
-- CTD methodology overview (`ctd://methods/overview`)
+### Meta-Analytic Diagnostics (3)
+`simpson_paradox_test` · `secular_trend` · `exposure_compare` · `confounder_check` · `guideline_compare`
+
+## Resources (17)
+
+| Resource | URI |
+|----------|-----|
+| NHANES codebook | `nhanes://codebook/{variable}` |
+| Codebook search | `nhanes://codebook/search/{term}` |
+| Cycle inventory | `nhanes://cycles/available` |
+| Cycle variables | `nhanes://cycles/{cycle}/variables` |
+| NCHS guidelines | `nhanes://guidelines/nchs` |
+| LOD guidelines | `nhanes://guidelines/lod` |
+| LOD by variable | `nhanes://lod/{variable}` |
+| Weight guide | `nhanes://weights/guide` |
+| Subpopulations | `nhanes://subpopulations` |
+| Exposure catalog | `epwas://catalog/exposures` |
+| Phenotype catalog | `epwas://catalog/phenotypes` |
+| EP-WAS metadata | `epwas://catalog/metadata` |
+| EP-WAS methods | `epwas://methods/overview` |
+| Vibration of effects | `epwas://methods/voe` |
+| Adjustment models | `epwas://models/adjustment` |
+| CompTox chemical | `comptox://chemical/{identifier}` |
+| CTD methods | `ctd://methods/overview` |
 
 ## Guardrails
 
-Every analysis enforces epidemiological best practices:
+Every analysis enforces epidemiological best practices automatically:
 
-- **Survey weights** — Automatic selection (WTMEC2YR, WTDRD1, WTSAF2YR) based on variable type
-- **Cell size** — N >= 30 per NCHS analytic guidelines; unreliable estimates flagged
-- **LOD handling** — Automatic detection of below-LOD values via comment codes (LBX* → LBD*LC)
-- **Variance estimation** — PSU (SDMVPSU) and strata (SDMVSTRA) with nest=TRUE
-- **Multiple testing** — Bonferroni and Benjamini-Hochberg FDR correction
-- **Code provenance** — Every computation returns the exact R code that produced it
+- **Survey weights** — Correct weight selection (WTMEC2YR, WTDRD1, WTSAF2YR) based on variable type
+- **LOD handling** — Automatic below-LOD detection via comment codes; warnings when >40% censored
+- **Cell size** — N ≥ 30 per NCHS guidelines; unreliable estimates flagged
+- **Variance estimation** — PSU + strata with nest=TRUE
+- **Multiple testing** — Bonferroni (0.05/165,342 = 3.02e-7) and BH-FDR
+- **Code provenance** — Every R computation returns the exact code that produced it
+
+## Privacy
+
+The LLM never accesses individual-level data. All tools return only aggregated, disclosure-safe statistics. Cell suppression is enforced for small samples.
+
+## Project Structure
+
+```
+src/
+  tools/          46 MCP tool implementations
+  resources/      17 MCP resource handlers
+  r-bridge/       R subprocess executor + 26 R scripts
+  data/           DuckDB connection manager
+  variables/      Variable resolver, alias maps, CompTox, CTD, NHANES-HHEAR bridge
+  guardrails/     Weight enforcement, LOD, cell size, cycle pooling, multiple testing
+  codegen/        R code generation templates
+  config.ts       Data path resolution (supports EXPOSOMEQL_DATA_DIR env var)
+  server.ts       Server initialization
+scripts/
+  smoke-test.ts         Smoke test suite
+  setup-local-data.sh   Local data directory setup (avoids cloud sync issues)
+  ctd-etl.ts            CTD data download and Parquet conversion
+  nutrient-scope.ts     Nutrient coverage scoping
+data/
+  nutrient_rct_evidence.csv          64 curated RCT meta-analysis effects
+  nutrient_outcome_phenotype_map.csv 75 RCT outcomes → NHANES phenotypes
+  ctd/parquet/                       CTD Parquet files
+docs/
+  USER_GUIDE.md                      Full user guide with examples and prompts
+  validation_results.md              Systematic validation (92% accuracy)
+  nutrient_guidelines_report.md      Dietary guidelines analysis
+  pfas_exposure_report.md            PFAS health effects critique of ATSDR
+  nutrient_rct_database.md           RCT evidence database documentation
+  positioning_vs_agents.md           Comparison with Biomni, Elicit, BioMCP
+  WALKTHROUGH_URIC_ACID.md           Discovery case study
+paper/
+  PAPER_DRAFT.md                     NMI paper draft
+```
 
 ## Prerequisites
 
 - **Node.js** >= 18
 - **R** >= 4.0 with packages: `survey`, `nhanespewas`, `jsonlite`, `DBI`, `RSQLite`, `dplyr`, `quantreg`
 - **nhanespewas** R package: `remotes::install_github("chiragjp/nhanespewas")`
-
-## Setup
-
-```bash
-# Install dependencies
-npm install
-
-# Ensure data symlink exists
-ls -la data/  # should point to ../nhanespewas/db/
-
-# Download and process CTD data
-npx tsx scripts/ctd-etl.ts
-
-# Build
-npm run build
-
-# Run
-npm start        # production (compiled)
-npm run dev      # development (tsx)
-```
-
-## MCP Client Configuration
-
-Add to your MCP client config (e.g., Claude Desktop `claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "exposomeql": {
-      "command": "node",
-      "args": ["/path/to/exposomeql/dist/index.js"]
-    }
-  }
-}
-```
-
-## Privacy Architecture
-
-The LLM never accesses individual-level data. It invokes tools that return only aggregated, disclosure-safe statistics. Cell suppression is enforced for N < 30. This design makes ExposomeQL suitable for federated deployment behind institutional firewalls.
-
-## Project Structure
-
-```
-src/
-  tools/          MCP tool implementations (36 tools)
-  resources/      MCP resource handlers (12 resources)
-  r-bridge/       R subprocess executor + 24 R scripts
-  data/           DuckDB connection manager (NHANES + CTD)
-  variables/      Variable resolver, alias maps, CompTox, CTD map, NHANES-HHEAR bridge
-  guardrails/     Weight enforcement, LOD, cell size, cycle pooling, multiple testing
-  codegen/        R code generation templates
-  server.ts       Server initialization
-scripts/
-  ctd-etl.ts      CTD batch download, filter, and Parquet conversion
-  ctd-etl.sh      Shell alternative for CTD ETL
-data/             Symlink to ../nhanespewas/db/ (SQLite databases)
-  ctd/parquet/    CTD Parquet files (generated by ctd-etl)
-dist/             Compiled JavaScript output
-bin/              CLI entry point
-```
-
-## Testing
-
-```bash
-# Test R scripts directly
-echo '{"variable":"LBXBPB","cycles":["J"],"subgroup":null}' | \
-  EXPOSOMEQL_DB_PATH="data/nhanes_031725.sqlite" \
-  Rscript src/r-bridge/r-scripts/nhanes_mean.R
-
-# Test server initialization
-node -e "import('./dist/server.js').then(({createServer}) => createServer().then(() => {console.log('OK'); process.exit(0)}))"
-```
+- **Data**: NHANES SQLite databases (see setup instructions)
 
 ## Citation
 
 If you use ExposomeQL in your research, please cite:
 
 > Patel CJ, Manrai AK. Exposome Agents: How AI Reasoning Over Public Biomonitoring Data Can Accelerate Environmental Health Policy. (2025).
+
+EP-WAS data:
+> Patel CJ. An Environment-Wide Association Study (EWAS) on Type 2 Diabetes Mellitus. PLoS One, 2010.
 
 CTD data:
 > Davis AP, et al. Comparative Toxicogenomics Database's 20th anniversary: update 2025. Nucleic Acids Research, 2025, 53(D1):D1328-D1338.
