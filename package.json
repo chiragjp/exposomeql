@@ -18,6 +18,7 @@
     "dev": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx scripts/smoke-test.ts",
+    "test:validate": "tsx scripts/validation-run.ts",
     "test:ci": "tsc --noEmit",
     "convert-data": "tsx scripts/convert-to-parquet.ts",
     "ctd-etl": "tsx scripts/ctd-etl.ts"
