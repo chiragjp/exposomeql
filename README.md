@@ -225,10 +225,8 @@ paper/
 
 If you use ExposomeQL in your research, please cite:
 
-> Patel CJ, Manrai AK. Exposome Agents: How AI Reasoning Over Public Biomonitoring Data Can Accelerate Environmental Health Policy. (2025).
-
 EP-WAS data:
-> Patel CJ. An Environment-Wide Association Study (EWAS) on Type 2 Diabetes Mellitus. PLoS One, 2010.
+> Patel CJ, Ioannidis JP, Manrai AK. An atlas of exposome–phenome associations in health and disease risk. https://www.nature.com/articles/s41591-026-04266-0
 
 CTD data:
 > Davis AP, et al. Comparative Toxicogenomics Database's 20th anniversary: update 2025. Nucleic Acids Research, 2025, 53(D1):D1328-D1338.
