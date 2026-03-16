@@ -6,7 +6,7 @@ A primary data agent for environmental epidemiology. ExposomeQL is an MCP server
 
 ## Why ExposomeQL?
 
-70-90% of chronic disease risk is environmental, yet no AI infrastructure existed for exposomics. ExposomeQL fills this gap.
+A large portion of disease risk is environmental or non-genetic, yet no AI infrastructure existed for exposomics. ExposomeQL fills this gap.
 
 Unlike literature synthesis agents (Elicit, Consensus, Semantic Scholar) that search *what researchers wrote*, ExposomeQL queries *what the data shows* — with proper epidemiological methods (survey weights, LOD handling, meta-analysis, multiple testing correction) that a general-purpose agent cannot improvise.
 

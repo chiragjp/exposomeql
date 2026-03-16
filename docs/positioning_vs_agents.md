@@ -102,6 +102,22 @@ ExposomeQL is not a replacement for literature agents — it is complementary:
 
 This is the vision of **agentic science**: multiple specialized tools orchestrated by an LLM to conduct rigorous, reproducible research that would take a human team weeks.
 
+### Integration with OpenClaw and Other Agent Frameworks
+
+ExposomeQL is designed as a **portable skill** — any MCP-compatible agent framework can use it. The most immediate integration target is **OpenClaw**, the open-source AI agent framework (247K+ GitHub stars, March 2026) where over 65% of active skills already wrap MCP servers.
+
+| Agent Framework | MCP Support | ExposomeQL Integration |
+|----------------|-------------|----------------------|
+| **OpenClaw** | Native — 134+ MCP tools, one-click skill install | Add as MCP skill via stdio or Streamable HTTP |
+| **Claude Desktop** | Native — MCP is Anthropic's protocol | Current primary deployment |
+| **Claude Code** | Native | Current development environment |
+| **Biomni** | MCP client support | ExposomeQL as environmental health data layer |
+| **Custom agents** (LangChain, CrewAI, AutoGen) | Via MCP client libraries | Any agent with MCP client SDK |
+
+**Why this matters**: ExposomeQL is not locked to one AI platform. As MCP adoption grows (Anthropic, OpenAI, Google all supporting it), ExposomeQL becomes accessible to any researcher using any MCP-compatible agent. The `SKILL.md` file in the repository enables automatic discovery and registration on platforms like Smithery.
+
+An OpenClaw user could ask: *"What are the health effects of PFAS, and does the CDC's assessment hold up?"* — OpenClaw routes to ExposomeQL, which runs `exposure_compare`, `simpson_paradox_test`, `confounder_check`, and `ctd_chemical_genes`, returning a data-driven critique in seconds.
+
 ## Key Differentiators for the Paper
 
 For the NMI submission, emphasize:
