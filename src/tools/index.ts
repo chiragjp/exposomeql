@@ -2,7 +2,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 import type { AppContext, ResolveResult, CohortConfig } from "../types.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { MODEL_DESCRIPTIONS, CYCLE_TO_SERIES, SERIES_MAP } from "../types.js";
 import { formatCellSizeWarning } from "../guardrails/cell-size.js";
 import { checkLOD, isLabBiomarker } from "../guardrails/lod-handling.js";
