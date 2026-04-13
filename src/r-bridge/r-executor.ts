@@ -26,6 +26,34 @@ export class RExecutor {
     this.timeoutMs = timeoutMs;
   }
 
+  /**
+   * Check that Rscript and required R packages are available. Non-blocking:
+   * logs a warning to stderr if anything is missing but never throws.
+   * Returns the list of missing packages (empty array if all good; `null` if
+   * Rscript itself couldn't be spawned).
+   */
+  async checkRDependencies(): Promise<string[] | null> {
+    const required = [
+      "survey", "dplyr", "tidyr", "purrr", "broom", "jsonlite",
+      "DBI", "RSQLite", "nhanespewas",
+    ];
+    const rExpr = `missing <- c(${required.map((p) => `"${p}"`).join(", ")})[!vapply(c(${required
+      .map((p) => `"${p}"`)
+      .join(", ")}), requireNamespace, logical(1), quietly = TRUE)]; cat(paste(missing, collapse = ","))`;
+
+    return new Promise((resolve) => {
+      const child = spawn(this.rscriptPath, ["-e", rExpr], { stdio: ["ignore", "pipe", "pipe"] });
+      let out = "";
+      child.stdout.on("data", (d: Buffer) => { out += d.toString(); });
+      child.on("error", () => resolve(null));
+      child.on("close", (code) => {
+        if (code !== 0) return resolve(null);
+        const missing = out.trim() ? out.trim().split(",") : [];
+        resolve(missing);
+      });
+    });
+  }
+
   async execute(
     scriptName: string,
     params: Record<string, unknown>,

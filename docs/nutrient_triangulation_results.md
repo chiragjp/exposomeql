@@ -1,9 +1,9 @@
-# Nutrient Triangulation Results: RCT vs EP-WAS Concordance
+# Nutrient Triangulation Results: Meta-Analytic vs EP-WAS Concordance
 
-## Date: March 2026
+## Date: March 2026 (updated with source verification corrections)
 
 ## Overview
-Systematic comparison of RCT meta-analysis evidence against EP-WAS observational associations for 14 nutrients across 41 biomarker-outcome pairs. Each RCT effect direction was compared to the corresponding EP-WAS association direction (using dietary recall DR1T* variables as exposures, model 6 adjustment).
+Systematic comparison of published meta-analytic evidence (predominantly from RCTs; 61/64 entries from RCT meta-analyses, plus 1 observational MA, 1 mixed RCT+cohort, 1 MR) against EP-WAS observational associations for 14 nutrients across 41 biomarker-outcome pairs. Each meta-analytic effect direction was compared to the corresponding EP-WAS association direction (using dietary recall DR1T* variables as exposures, model 6 adjustment). Concordance does not establish causality — it evaluates whether observational and experimental/meta-analytic evidence point in the same direction.
 
 ## Overall Concordance
 
@@ -74,7 +74,7 @@ Biomarker captures the biological signal that dietary recall completely misses.
 
 ## Interpretation
 
-1. **61% overall concordance** between RCT and EP-WAS observational evidence using dietary recall is moderate — better than chance but reflecting substantial confounding in 24-hour recall data.
+1. **61% overall concordance** between meta-analytic and EP-WAS observational evidence using dietary recall is moderate — better than chance but reflecting substantial confounding in 24-hour recall data. Note: 61/64 entries are from RCT meta-analyses; 3 use non-RCT evidence (1 observational MA, 1 mixed, 1 MR).
 
 2. **Biomarkers outperform dietary recall** (83% vs 50%) when both are available, validating the use of serum biomarkers as less confounded exposure measures.
 

@@ -696,5 +696,73 @@ https://wwwn.cdc.gov/nchs/nhanes/analyticguidelines.aspx
     })
   );
 
-  console.error("[exposomeql] Registered 17 resources");
+  // 6. Clinical interpretation guidance
+  server.resource(
+    "exposomeql-clinical-guidance",
+    "exposomeql://guidance/clinical-interpretation",
+    async (uri) => ({
+      contents: [{
+        uri: uri.href,
+        mimeType: "text/markdown" as const,
+        text: `# Clinical Interpretation Guidance for ExposomeQL Results
+
+## When to Flag Reverse Causality
+
+**ALWAYS run \`nhanes_sensitivity\` when reporting on cardiometabolic phenotypes:**
+- Fasting glucose (LBXGLU, LBXSGL)
+- HbA1c (LBXGH)
+- Insulin (LBXIN)
+- Triglycerides (LBXSTR, LBXTR)
+- Total cholesterol (LBXSCH, LBXTC)
+- LDL cholesterol (LBDLDL)
+- Uric acid (LBXSUA)
+- Creatinine (LBXSCR)
+- Blood pressure (BPXSY4, MSYSTOLIC, MDIASTOLIC)
+- BMI (BMXBMI)
+- CRP (LBXCRP)
+
+**Why:** These phenotypes are strongly affected by prevalent disease and medication use.
+People with diagnosed diabetes have higher glucose (disease → phenotype).
+People on statins have lower cholesterol (treatment → phenotype).
+People with kidney disease have altered chemical clearance (disease → exposure).
+In cross-sectional data, these create reverse-causal associations that masquerade as exposure effects.
+
+**Recommended workflow:**
+1. Report the base EP-WAS association
+2. Run \`nhanes_sensitivity(exposure, phenotype, strategy: "both")\`
+3. Report whether the association is ROBUST (<20% change), ATTENUATED (20-50%), SUBSTANTIALLY ATTENUATED (>50%), or REVERSED
+4. If attenuated, explain that the association is partly driven by disease status, not purely by the exposure
+
+## When to Flag Confounding
+
+**Run \`confounder_check\` for these exposure types:**
+- **PFAS (LBXPFOA, LBXPFOS, etc.):** albumin binding creates healthy-participant bias
+- **Blood metals (LBXBPB, LBXBCD):** hemoglobin/RBC partitioning confounds hematology outcomes
+- **Urinary biomarkers (URX*):** dilution confounds all urinary associations — check creatinine
+- **Dietary recall (DR1T*):** correlated dietary patterns — all nutrients show ~8,000 associations
+
+## Dose Context
+
+**Always provide practical dose context when reporting to non-experts:**
+- |β| < 0.03: negligible — don't alarm the user
+- |β| 0.03-0.08: very small — unlikely clinically relevant at typical exposure
+- |β| 0.08-0.15: small — relevant at high exposure levels only
+- |β| > 0.15: moderate — worth monitoring
+- Median R² for significant ExWAS association: 0.6%
+- Most individual exposure effects at typical levels are smaller than day-to-day variation
+
+## Reporting Standards
+
+When presenting results to users:
+1. Lead with the **direction and practical significance**, not the p-value
+2. Contextualize with **regulatory thresholds** where available
+3. State whether evidence is **observational only** or **triangulated** (EP-WAS + CTD + HHEAR/RCT)
+4. For nutrients: note that dietary recall concordance with experimental evidence is only 50%; recommend biomarker-based assessment
+5. Never imply individual causality from population-level cross-sectional data
+`,
+      }],
+    })
+  );
+
+  console.error("[exposomeql] Registered 18 resources");
 }

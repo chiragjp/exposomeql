@@ -2,13 +2,13 @@
 
 ## Executive Summary
 
-Using ExposomeQL's nutrient triangulation framework, we systematically evaluated 16 dietary nutrients against US Dietary Reference Intakes (DRI) and the 2025-2030 Dietary Guidelines for Americans (DGA) by integrating three independent evidence streams: (1) EP-WAS observational associations from 23.6 million pre-computed analyses across NHANES 1999-2018, (2) curated RCT meta-analysis evidence (64 nutrient-outcome pairs from Cochrane reviews and high-impact journals), and (3) secular trends in actual dietary intake and serum biomarker levels.
+Using ExposomeQL's nutrient triangulation framework, we systematically evaluated 16 dietary nutrients against US Dietary Reference Intakes (DRI) and the 2025-2030 Dietary Guidelines for Americans (DGA) by integrating three independent evidence streams: (1) EP-WAS observational associations from 23.6 million pre-computed analyses across NHANES 1999-2018, (2) curated meta-analytic evidence (64 nutrient-outcome pairs — 61 from RCT meta-analyses, 3 from observational/MR sources — from Cochrane reviews and high-impact journals), and (3) secular trends in actual dietary intake and serum biomarker levels.
 
 ### Key Findings
 
 1. **The "nutrients of concern" identified by DGA 2025-2030 are confirmed by our evidence triangulation** — vitamin D, calcium, potassium, and fiber are consistently below DRI thresholds across all NHANES cycles, with no improving trend.
 
-2. **Dietary recall-based observational evidence has only 50% concordance with RCT evidence** (coin-flip accuracy), while serum biomarker-based evidence achieves 83% concordance — a fundamental limitation for deriving dietary guidelines from observational data alone.
+2. **Dietary recall-based observational evidence has only 50% concordance with meta-analytic evidence** (predominantly RCTs; coin-flip accuracy), while serum biomarker-based evidence achieves 83% concordance — a fundamental limitation for deriving dietary guidelines from observational data alone.
 
 3. **Several nutrients show concerning secular trends**: vitamin C intake has declined 22% since 2003, iron intake declined 11%, while sodium remains 37% above the CDRR with no improvement.
 
@@ -87,8 +87,8 @@ Serum biomarker trends provide a less confounded view of nutritional status:
 
 | Evidence Comparison | Concordance Rate | Implication |
 |--------------------|-----------------|-------------|
-| RCT vs EP-WAS (dietary recall) | **61%** (25/41) | Moderate — many confounded |
-| RCT vs EP-WAS (serum biomarker) | **83%** (5/6) | Strong — biomarkers are more reliable |
+| Meta-analytic vs EP-WAS (dietary recall) | **61%** (25/41) | Moderate — many confounded |
+| Meta-analytic vs EP-WAS (serum biomarker) | **83%** (5/6) | Strong — biomarkers are more reliable |
 | Dietary recall as predictor of truth | **50%** | Equivalent to coin flip |
 
 ### Per-Nutrient Concordance with RCT Evidence
@@ -137,7 +137,7 @@ Our central finding — that dietary recall-based observational evidence agrees 
 
 ### 4.3 Where the Field Should Go
 
-**1. Biomarker-first nutritional epidemiology.** Our data shows biomarker exposures are 33 percentage points more concordant with RCT evidence than dietary recall. Future ExWAS-style analyses should prioritize serum/plasma biomarkers (metabolomics panels covering vitamins, minerals, fatty acid profiles) over self-reported intake. The cost of metabolomics has dropped sufficiently to make this feasible in large cohorts.
+**1. Biomarker-first nutritional epidemiology.** Our data shows biomarker exposures are 33 percentage points more concordant with meta-analytic evidence (predominantly RCTs) than dietary recall. Future ExWAS-style analyses should prioritize serum/plasma biomarkers (metabolomics panels covering vitamins, minerals, fatty acid profiles) over self-reported intake. The cost of metabolomics has dropped sufficiently to make this feasible in large cohorts.
 
 **2. Triangulation as a standard for dietary guideline derivation.** The current DRI/DGA process relies heavily on committee review of individual studies. A systematic triangulation framework — requiring concordance across observational, experimental (RCT), and causal (MR) evidence before a recommendation is made — would be more robust and transparent. Our analysis provides a template.
 
@@ -171,7 +171,7 @@ For each nutrient-outcome pair with both RCT and EP-WAS evidence, we compared th
 ---
 
 ## Data Files
-- `nutrient_rct_evidence.csv` — 64 curated RCT evidence rows
+- `nutrient_rct_evidence.csv` — 64 curated meta-analytic evidence rows (61 RCT, 3 non-RCT)
 - `nutrient_outcome_phenotype_map.csv` — 75 outcome-to-NHANES phenotype mappings
 - `nutrient_rct_search_methodology.md` — Reproducible search protocol
 - `nutrient_triangulation_results.md` — Full triangulation results

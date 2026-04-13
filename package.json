@@ -20,6 +20,7 @@
     "test": "tsx scripts/smoke-test.ts",
     "test:validate": "tsx scripts/validation-run.ts",
     "test:ci": "tsc --noEmit",
+    "setup-r": "Rscript scripts/install-r-deps.R",
     "convert-data": "tsx scripts/convert-to-parquet.ts",
     "ctd-etl": "tsx scripts/ctd-etl.ts"
   },
@@ -50,6 +51,7 @@
     "data/nutrient_outcome_phenotype_map.csv",
     "scripts/setup-local-data.sh",
     "scripts/ctd-etl.ts",
+    "scripts/install-r-deps.R",
     "README.md"
   ]
 }

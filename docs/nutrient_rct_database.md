@@ -1,14 +1,14 @@
-# Nutrient RCT Evidence Database: Documentation
+# Nutrient Meta-Analytic Evidence Database: Documentation
 
 ## Overview
 
-A curated database of pooled effect estimates from randomized controlled trial (RCT) meta-analyses for 17 dietary nutrients, designed to enable evidence triangulation against EP-WAS observational associations from NHANES. Each nutrient-outcome pair is mapped to the corresponding NHANES phenotype variable, allowing direct comparison of experimental (RCT) and observational (EP-WAS) evidence directions.
+A curated database of pooled effect estimates from published meta-analyses for 17 dietary nutrients, designed to enable evidence triangulation against EP-WAS observational associations from NHANES. The database is predominantly from RCT meta-analyses (61/64 entries), with 3 entries from non-RCT sources where experimental evidence is unavailable: 1 observational prospective cohort meta-analysis (fiber → colorectal cancer), 1 mixed design pooling 1 RCT + 3 cohort studies (folic acid → NTD first occurrence), and 1 Mendelian randomization estimate (vitamin D → multiple sclerosis). Each nutrient-outcome pair is mapped to the corresponding NHANES phenotype variable, allowing direct comparison of meta-analytic and observational (EP-WAS) evidence directions. Concordance between these sources does not establish causality.
 
 ## Database Files
 
 ### 1. `data/nutrient_rct_evidence.csv`
 
-**Description**: Curated RCT meta-analysis effect estimates for nutrient-health outcome pairs.
+**Description**: Curated meta-analysis effect estimates for nutrient-health outcome pairs (61 RCT, 1 observational, 1 mixed, 1 MR).
 
 | Statistic | Value |
 |-----------|-------|
@@ -20,7 +20,7 @@ A curated database of pooled effect estimates from randomized controlled trial (
 | Biomarker proxies | 1 |
 | Unique source journals | 28 |
 | Rows with PubMed ID | 55 (36 unique PMIDs) |
-| Source types | 19 Cochrane, 44 other meta-analyses, 1 MR |
+| Source types | 19 Cochrane, 42 RCT meta-analyses, 1 observational MA, 1 mixed (RCT+cohort), 1 MR |
 
 #### Schema
 

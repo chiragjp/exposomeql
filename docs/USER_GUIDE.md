@@ -285,7 +285,7 @@ Copy-paste these into Claude (or any MCP client) to get started immediately:
 
 ```
 1. nutrient_rct_evidence(nutrient: "vitamin D")
-   → 12 curated RCT outcomes (6 biomarker, 6 clinical)
+   → 12 curated meta-analytic outcomes (6 biomarker, 6 clinical)
 
 2. nutrient_triangulate(nutrient: "vitamin D")
    → RCT vs EP-WAS concordance: 80% (4/5 biomarker outcomes agree)

@@ -1,7 +1,7 @@
-# Nutrient RCT Evidence Curation: Search Methodology
+# Nutrient Meta-Analytic Evidence Curation: Search Methodology
 
 ## Objective
-Curate a reference table of RCT/meta-analysis evidence for nutrient-health outcome pairs, to serve as the third leg of a nutrient triangulation framework (alongside EP-WAS observational associations and Mendelian randomization causal estimates).
+Curate a reference table of published meta-analytic evidence for nutrient-health outcome pairs, to serve as the third leg of a nutrient triangulation framework (alongside EP-WAS observational associations and Mendelian randomization causal estimates). The database prioritizes RCT meta-analyses but includes observational meta-analyses and MR evidence (3/64 entries) where RCT data are unavailable. The goal is directional concordance assessment, not causal inference.
 
 ## Search Strategy
 

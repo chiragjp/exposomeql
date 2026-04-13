@@ -5512,7 +5512,1025 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
     }
   );
 
-  console.error(`[exposomeql] Registered 46 tools (6 Class 1, 5 Class 2, 6 Class 3, 9 HHEAR, 1 Chemical, 5 CTD, 4 Cross-cutting, 5 Nutrient, 3 Diagnostics, 2 Evidence)`);
+  // ── Tool: my_exposome ──
+
+  server.tool(
+    "my_exposome",
+    "Given a demographic profile (age, sex, race/ethnicity, income level), scan the EP-WAS atlas for the environmental exposures most relevant to someone with this profile. Returns: (1) the chemical exposure classes most associated with health outcomes in the population, (2) the specific phenotypes each exposure affects, (3) regulatory thresholds where available, and (4) nutrient intake adequacy against dietary guidelines. Use this when someone says 'tell me about my exposures and health risks.'",
+    {
+      age: z.number().describe("Age in years"),
+      sex: z.enum(["male", "female"]).describe("Sex"),
+      race_ethnicity: z.enum([
+        "mexican_american", "other_hispanic", "non_hispanic_white",
+        "non_hispanic_black", "non_hispanic_asian", "other_multiracial"
+      ]).optional().describe("Race/ethnicity"),
+      income: z.enum(["low", "middle", "high"]).optional()
+        .describe("Income level: low (PIR<1.3), middle (1.3-3.5), high (>3.5)"),
+      concerns: z.array(z.string()).optional()
+        .describe("Optional specific health concerns (e.g., ['diabetes', 'kidney', 'cardiovascular', 'thyroid'])"),
+    },
+    async ({ age, sex, race_ethnicity, income, concerns }) => {
+      // Build subgroup filter for NHANES
+      const filters: string[] = [];
+      filters.push(`RIDAGEYR >= ${age - 5} & RIDAGEYR <= ${age + 5}`);
+      filters.push(sex === "male" ? "RIAGENDR == 1" : "RIAGENDR == 2");
+      if (race_ethnicity) {
+        const raceMap: Record<string, number> = {
+          mexican_american: 1, other_hispanic: 2, non_hispanic_white: 3,
+          non_hispanic_black: 4, non_hispanic_asian: 6, other_multiracial: 7,
+        };
+        if (raceMap[race_ethnicity]) filters.push(`RIDRETH3 == ${raceMap[race_ethnicity]}`);
+      }
+
+      const subgroup = filters.join(" & ");
+      const profileDesc = `${age}-year-old ${sex}${race_ethnicity ? `, ${race_ethnicity.replace(/_/g, " ")}` : ""}${income ? `, ${income} income` : ""}`;
+
+      // Key exposure categories with representative NHANES variables and thresholds
+      const exposureClasses = [
+        { category: "Heavy Metals", exposures: [
+          { var: "LBXBPB", name: "Lead (blood)", unit: "µg/dL", thresholds: [{ val: 3.5, label: "CDC reference (children)", source: "CDC 2021" }, { val: 5.0, label: "CDC adult concern", source: "CDC" }] },
+          { var: "LBXBCD", name: "Cadmium (blood)", unit: "µg/L", thresholds: [{ val: 1.0, label: "HBM-I", source: "German HBM" }] },
+          { var: "LBXTHG", name: "Mercury (blood)", unit: "µg/L", thresholds: [{ val: 2.0, label: "HBM-I", source: "German HBM" }, { val: 5.0, label: "HBM-II", source: "German HBM" }] },
+        ]},
+        { category: "PFAS", exposures: [
+          { var: "LBXPFOA", name: "PFOA", unit: "ng/mL", thresholds: [{ val: 2.0, label: "HBM-I", source: "German HBM" }, { val: 10.0, label: "HBM-II", source: "German HBM" }] },
+          { var: "LBXPFOS", name: "PFOS", unit: "ng/mL", thresholds: [{ val: 5.0, label: "HBM-I", source: "German HBM" }, { val: 20.0, label: "HBM-II", source: "German HBM" }] },
+          { var: "LBXPFHS", name: "PFHxS", unit: "ng/mL", thresholds: [] },
+          { var: "LBXPFNA", name: "PFNA", unit: "ng/mL", thresholds: [] },
+        ]},
+        { category: "Phenols & Plasticizers", exposures: [
+          { var: "URXBPH", name: "Bisphenol A (BPA)", unit: "ng/mL", thresholds: [] },
+        ]},
+        { category: "Smoking", exposures: [
+          { var: "LBXCOT", name: "Cotinine (smoking biomarker)", unit: "ng/mL", thresholds: [{ val: 0.05, label: "Secondhand smoke", source: "Benowitz 2009" }, { val: 10.0, label: "Active smoker", source: "Benowitz 2009" }] },
+        ]},
+      ];
+
+      // Key health phenotypes to check associations against
+      const healthPhenotypes = [
+        { var: "LBXSUA", name: "Uric acid", system: "Kidney" },
+        { var: "LBXSCR", name: "Creatinine", system: "Kidney" },
+        { var: "LBXSCH", name: "Total cholesterol", system: "Cardiovascular" },
+        { var: "LBDLDL", name: "LDL cholesterol", system: "Cardiovascular" },
+        { var: "LBXHDD", name: "HDL cholesterol", system: "Cardiovascular" },
+        { var: "LBXSTR", name: "Triglycerides", system: "Cardiovascular" },
+        { var: "LBXGH", name: "HbA1c", system: "Metabolic" },
+        { var: "LBXGLU", name: "Fasting glucose", system: "Metabolic" },
+        { var: "LBXCRP", name: "CRP", system: "Inflammatory" },
+        { var: "LBXTSH", name: "TSH", system: "Thyroid" },
+        { var: "LBXSATSI", name: "ALT", system: "Liver" },
+        { var: "BPXSY4", name: "Systolic BP", system: "Cardiovascular" },
+        { var: "LBXHGB", name: "Hemoglobin", system: "Hematology" },
+        { var: "LBXWBCSI", name: "WBC count", system: "Immune" },
+      ];
+
+      // Filter phenotypes if user has specific concerns
+      let relevantPhenotypes = healthPhenotypes;
+      if (concerns && concerns.length > 0) {
+        const concernSystems = new Set<string>();
+        for (const c of concerns) {
+          const cl = c.toLowerCase();
+          if (cl.includes("diabet") || cl.includes("glucose") || cl.includes("metabol")) concernSystems.add("Metabolic");
+          if (cl.includes("kidney") || cl.includes("renal") || cl.includes("uric")) concernSystems.add("Kidney");
+          if (cl.includes("cardio") || cl.includes("heart") || cl.includes("cholesterol") || cl.includes("bp") || cl.includes("blood pressure")) concernSystems.add("Cardiovascular");
+          if (cl.includes("thyroid")) concernSystems.add("Thyroid");
+          if (cl.includes("liver")) concernSystems.add("Liver");
+          if (cl.includes("inflam")) concernSystems.add("Inflammatory");
+          if (cl.includes("immune")) concernSystems.add("Immune");
+        }
+        if (concernSystems.size > 0) {
+          relevantPhenotypes = healthPhenotypes.filter(p => concernSystems.has(p.system));
+          // Always include a few key ones
+          const keyVars = new Set(relevantPhenotypes.map(p => p.var));
+          for (const p of healthPhenotypes) {
+            if (!keyVars.has(p.var) && ["LBXGH", "LBXCRP", "BPXSY4"].includes(p.var)) {
+              relevantPhenotypes.push(p);
+            }
+          }
+        }
+      }
+
+      // Query EP-WAS for each exposure × phenotype combination
+      const exposureResults: Array<Record<string, unknown>> = [];
+
+      for (const cls of exposureClasses) {
+        for (const exp of cls.exposures) {
+          const associations: Array<Record<string, unknown>> = [];
+
+          for (const pheno of relevantPhenotypes) {
+            try {
+              const rows = await ctx.db.query(
+                `SELECT "estimate.uwls" as estimate, "p.value.uwls" as p_value
+                 FROM pe_stats.adjusted_meta_uwls
+                 WHERE expo_name = 'expo' AND evarname = $1 AND pvarname = $2
+                   AND CAST(model_number AS INTEGER) = 6
+                 LIMIT 1`,
+                exp.var, pheno.var
+              );
+              if (rows.length > 0) {
+                const r = rows[0] as Record<string, unknown>;
+                const pval = r.p_value as number;
+                if (Math.abs(pval) < 0.05) {
+                  const beta = r.estimate as number;
+                  const absBeta = Math.abs(beta);
+
+                  // Practical dose context: EP-WAS betas are per 1-SD of log10-transformed,
+                  // z-scored exposure. Translate to practical meaning.
+                  // A 1-SD change in log10(exposure) ≈ 3-10 fold change in raw exposure.
+                  // Most people's exposure varies by 2-5x across the IQR.
+                  let practicalContext: string;
+                  if (absBeta < 0.03) {
+                    practicalContext = "Negligible — even a large change in exposure would have no meaningful effect on this marker. Effect is smaller than normal day-to-day variation.";
+                  } else if (absBeta < 0.08) {
+                    practicalContext = "Very small — a 10-fold change in your exposure level would shift this marker by less than 0.1 SD. Unlikely to be clinically relevant at typical population exposure levels.";
+                  } else if (absBeta < 0.15) {
+                    practicalContext = "Small but detectable — a 10-fold increase in exposure is associated with a modest shift in this marker. May be relevant at very high exposure levels (e.g., occupational or contamination-site exposures) but not at typical dietary/environmental levels.";
+                  } else {
+                    practicalContext = "Moderate — among the larger effects in the exposome. A substantial change in exposure is associated with a meaningful shift in this marker. Worth monitoring if you are in a high-exposure group.";
+                  }
+
+                  associations.push({
+                    phenotype: pheno.name,
+                    system: pheno.system,
+                    beta,
+                    p_value: pval,
+                    direction: beta > 0 ? "higher" : "lower",
+                    effect_size_interpretation: absBeta < 0.03 ? "negligible" : absBeta < 0.08 ? "very_small" : absBeta < 0.15 ? "small" : "moderate",
+                    practical_context: practicalContext,
+                  });
+                }
+              }
+            } catch { /* skip */ }
+          }
+
+          if (associations.length > 0 || exp.thresholds.length > 0) {
+            exposureResults.push({
+              category: cls.category,
+              exposure: exp.name,
+              nhanes_variable: exp.var,
+              unit: exp.unit,
+              thresholds: exp.thresholds,
+              n_significant_associations: associations.length,
+              health_associations: associations.sort((a, b) =>
+                Math.abs(a.p_value as number) - Math.abs(b.p_value as number)
+              ),
+            });
+          }
+        }
+      }
+
+      // Nutrient adequacy check
+      const nutrientChecks = [
+        { var: "DR1TVD", name: "Vitamin D", rda: 15, unit: "mcg", status: "Underconsumption concern" },
+        { var: "DR1TCALC", name: "Calcium", rda: 1000, unit: "mg", status: "Underconsumption concern" },
+        { var: "DR1TFIBE", name: "Fiber", rda: sex === "male" ? 38 : 25, unit: "g", status: "Underconsumption concern" },
+        { var: "DR1TSODI", name: "Sodium", rda: 2300, unit: "mg (CDRR upper limit)", status: "Overconsumption concern" },
+        { var: "DR1TPOTA", name: "Potassium", rda: sex === "male" ? 3400 : 2600, unit: "mg", status: "Underconsumption concern" },
+        { var: "DR1TMAGN", name: "Magnesium", rda: sex === "male" ? 420 : 320, unit: "mg", status: "Borderline adequate" },
+      ];
+
+      const nutrientResults: Array<Record<string, unknown>> = [];
+      for (const nut of nutrientChecks) {
+        // Get number of significant phenotype associations
+        try {
+          const countRow = await ctx.db.query(
+            `SELECT COUNT(*) as n FROM pe_stats.adjusted_meta_uwls
+             WHERE expo_name = 'expo' AND evarname = $1
+               AND CAST(model_number AS INTEGER) = 6 AND ABS("p.value.uwls") < 0.05`,
+            nut.var
+          );
+          const n = (countRow[0] as Record<string, unknown>).n as number;
+
+          // Get RCT evidence count
+          const rctCount = NUTRIENT_RCT_DATA.filter(r => {
+            const rName = r.nutrient?.toLowerCase() ?? "";
+            return rName.includes(nut.name.toLowerCase());
+          }).length;
+
+          nutrientResults.push({
+            nutrient: nut.name,
+            dri_value: nut.rda,
+            dri_unit: nut.unit,
+            dga_status: nut.status,
+            n_epwas_associations: n,
+            n_meta_analytic_outcomes: rctCount,
+          });
+        } catch { /* skip */ }
+      }
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            profile: profileDesc,
+            subgroup_filter: subgroup,
+            health_concerns: concerns ?? "general",
+            chemical_exposures: {
+              n_exposures_scanned: exposureResults.length,
+              summary: "The following chemical exposures have significant associations with health outcomes relevant to your profile. Thresholds are from CDC, WHO, and German HBM Commission. Effect sizes are from NHANES population-level meta-analyses (not individual predictions).",
+              results: exposureResults,
+            },
+            nutrient_adequacy: {
+              summary: "Key nutrients flagged by the 2025-2030 Dietary Guidelines for Americans. DRI values are sex/age-specific RDA or AI. Population-level intake data suggest most Americans are below recommended levels for vitamin D, calcium, fiber, and potassium.",
+              results: nutrientResults,
+            },
+            dose_perspective: "Most environmental exposure effects are VERY SMALL at typical population levels. The median R-squared for a significant exposome association is 0.6% — meaning the exposure explains less than 1% of variation in the health marker. For context: the effect of going from the 25th to 75th percentile of lead exposure on uric acid is roughly equivalent to the effect of aging 1-2 years. Environmental exposures matter most at extremes (occupational exposure, contamination sites) or in aggregate (multiple small effects combining). For the average person eating a normal diet and living in a non-contaminated area, individual chemical exposures are unlikely to meaningfully shift clinical risk markers.",
+            important_caveats: [
+              "These are POPULATION-LEVEL associations, not individual risk predictions. Your personal risk depends on your actual measured exposure levels, genetics, lifestyle, and medical history.",
+              "EP-WAS effect sizes are from cross-sectional observational data and do not establish causation. Most effects are very small (R-squared < 1%).",
+              "The dose makes the poison. At typical US population exposure levels, most individual chemicals have negligible clinical impact. Concern is warranted primarily at high exposure levels (occupational, contamination sites) or for cumulative multi-chemical burden.",
+              "Threshold values are regulatory guidance levels set with safety margins, not clinical action limits. Being near a threshold does not mean you will develop health problems.",
+              "For clinical concerns, consult your physician. ExposomeQL provides data context, not medical advice.",
+              "To get your actual exposure levels, ask your doctor about biomonitoring (blood/urine testing for specific chemicals).",
+            ],
+          }, bigintReplacer, 2),
+        }],
+      };
+    }
+  );
+
+  // ── Tool: diet_assess ──
+
+  server.tool(
+    "diet_assess",
+    "Assess the health implications of a diet or meal by mapping foods/nutrients to EP-WAS associations and dietary guideline thresholds. Takes a list of nutrients with amounts (e.g., from a meal or daily intake), compares against DRI values, and returns the associated health phenotypes from the EP-WAS atlas plus meta-analytic evidence. The LLM should estimate nutrient content from the user's food description before calling this tool, or the user can provide nutrient amounts directly.",
+    {
+      nutrients: z.array(z.object({
+        name: z.string().describe("Nutrient name (e.g., 'vitamin D', 'calcium', 'fiber', 'sodium', 'omega-3')"),
+        amount: z.number().describe("Amount consumed in standard units"),
+        unit: z.string().describe("Unit (e.g., 'mcg', 'mg', 'g', 'IU')"),
+      })).describe("List of nutrients with amounts consumed"),
+      meal_description: z.string().optional().describe("Optional free-text description of the meal or diet for context"),
+      sex: z.enum(["male", "female"]).optional().describe("Sex for sex-specific DRI values"),
+    },
+    async ({ nutrients, meal_description, sex }) => {
+      const userSex = sex ?? "male";
+
+      // DRI reference values (sex-specific where applicable)
+      const DRI: Record<string, { rda: number; unit: string; ul: number | null; direction: "under" | "over"; display_rda: string }> = {
+        "vitamin d": { rda: 15, unit: "mcg", ul: 100, direction: "under", display_rda: "15 mcg (600 IU)" },
+        "calcium": { rda: 1000, unit: "mg", ul: 2500, direction: "under", display_rda: "1000 mg" },
+        "fiber": { rda: userSex === "male" ? 38 : 25, unit: "g", ul: null, direction: "under", display_rda: userSex === "male" ? "38 g" : "25 g" },
+        "sodium": { rda: 2300, unit: "mg", ul: 2300, direction: "over", display_rda: "< 2300 mg (CDRR)" },
+        "potassium": { rda: userSex === "male" ? 3400 : 2600, unit: "mg", ul: null, direction: "under", display_rda: userSex === "male" ? "3400 mg" : "2600 mg" },
+        "magnesium": { rda: userSex === "male" ? 420 : 320, unit: "mg", ul: 350, direction: "under", display_rda: userSex === "male" ? "420 mg" : "320 mg" },
+        "iron": { rda: userSex === "male" ? 8 : 18, unit: "mg", ul: 45, direction: "under", display_rda: userSex === "male" ? "8 mg" : "18 mg" },
+        "zinc": { rda: userSex === "male" ? 11 : 8, unit: "mg", ul: 40, direction: "under", display_rda: userSex === "male" ? "11 mg" : "8 mg" },
+        "vitamin c": { rda: userSex === "male" ? 90 : 75, unit: "mg", ul: 2000, direction: "under", display_rda: userSex === "male" ? "90 mg" : "75 mg" },
+        "vitamin e": { rda: 15, unit: "mg", ul: 1000, direction: "under", display_rda: "15 mg" },
+        "vitamin a": { rda: userSex === "male" ? 900 : 700, unit: "mcg", ul: 3000, direction: "under", display_rda: userSex === "male" ? "900 mcg RAE" : "700 mcg RAE" },
+        "vitamin k": { rda: userSex === "male" ? 120 : 90, unit: "mcg", ul: null, direction: "under", display_rda: userSex === "male" ? "120 mcg" : "90 mcg" },
+        "vitamin b12": { rda: 2.4, unit: "mcg", ul: null, direction: "under", display_rda: "2.4 mcg" },
+        "folate": { rda: 400, unit: "mcg", ul: 1000, direction: "under", display_rda: "400 mcg DFE" },
+        "folic acid": { rda: 400, unit: "mcg", ul: 1000, direction: "under", display_rda: "400 mcg DFE" },
+        "selenium": { rda: 55, unit: "mcg", ul: 400, direction: "under", display_rda: "55 mcg" },
+        "omega-3": { rda: 0.25, unit: "g", ul: null, direction: "under", display_rda: "250 mg (AI)" },
+        "omega-3 dha": { rda: 0.25, unit: "g", ul: null, direction: "under", display_rda: "250 mg (AI)" },
+        "omega-3 epa": { rda: 0.25, unit: "g", ul: null, direction: "under", display_rda: "250 mg (AI, combined EPA+DHA)" },
+      };
+
+      const assessments: Array<Record<string, unknown>> = [];
+
+      for (const nut of nutrients) {
+        const nutKey = nut.name.toLowerCase().trim();
+        const dri = DRI[nutKey];
+        const resolved = resolveNutrient(nut.name);
+
+        // DRI comparison
+        let driAssessment: Record<string, unknown> | null = null;
+        if (dri) {
+          const pctDri = (nut.amount / dri.rda) * 100;
+          let status: string;
+          if (dri.direction === "under") {
+            if (pctDri >= 100) status = "meets_or_exceeds_dri";
+            else if (pctDri >= 75) status = "approaching_dri";
+            else if (pctDri >= 50) status = "below_dri";
+            else status = "well_below_dri";
+          } else {
+            // Overconsumption nutrient (sodium)
+            if (pctDri > 100) status = "exceeds_limit";
+            else if (pctDri > 80) status = "approaching_limit";
+            else status = "within_limit";
+          }
+
+          driAssessment = {
+            dri_value: dri.display_rda,
+            amount_consumed: `${nut.amount} ${nut.unit}`,
+            percent_of_dri: Math.round(pctDri),
+            status,
+            upper_limit: dri.ul ? `${dri.ul} ${dri.unit}` : "not established",
+            exceeds_ul: dri.ul ? nut.amount > dri.ul : false,
+          };
+        }
+
+        // EP-WAS associations for this nutrient
+        let topAssociations: Array<Record<string, unknown>> = [];
+        if (resolved) {
+          try {
+            const rows = await ctx.db.query(
+              `SELECT pvarname as phenotype, "estimate.uwls" as estimate, "p.value.uwls" as p_value
+               FROM pe_stats.adjusted_meta_uwls
+               WHERE expo_name = 'expo' AND evarname = $1
+                 AND CAST(model_number AS INTEGER) = 6
+                 AND ABS("p.value.uwls") < 0.01
+               ORDER BY ABS("estimate.uwls") DESC
+               LIMIT 5`,
+              resolved.dietary
+            );
+            topAssociations = (rows as Array<Record<string, unknown>>).map(r => {
+              const pVar = ctx.resolver.get(r.phenotype as string);
+              const beta = r.estimate as number;
+              const absBeta = Math.abs(beta);
+              return {
+                phenotype: r.phenotype,
+                phenotype_description: pVar?.description ?? r.phenotype,
+                beta,
+                p_value: r.p_value,
+                direction: beta > 0 ? "positive" : "negative",
+                practical_significance: absBeta < 0.03 ? "negligible" : absBeta < 0.08 ? "very_small" : absBeta < 0.15 ? "small" : "moderate",
+              };
+            });
+          } catch { /* skip */ }
+        }
+
+        // Meta-analytic (RCT) evidence
+        const rctMatches = NUTRIENT_RCT_DATA.filter(r => {
+          const rName = r.nutrient?.toLowerCase() ?? "";
+          return rName.includes(nutKey) || nutKey.includes(rName.split("(")[0].trim());
+        }).slice(0, 3);
+
+        assessments.push({
+          nutrient: nut.name,
+          amount: `${nut.amount} ${nut.unit}`,
+          dri_assessment: driAssessment,
+          top_epwas_associations: topAssociations,
+          meta_analytic_evidence: rctMatches.map(r => ({
+            outcome: r.outcome,
+            effect: `${r.effect_measure}=${r.effect_estimate}`,
+            direction: r.direction,
+            source: r.source_ref,
+          })),
+        });
+      }
+
+      // Overall assessment
+      const belowDri = assessments.filter(a =>
+        (a.dri_assessment as Record<string, unknown>)?.status === "well_below_dri" ||
+        (a.dri_assessment as Record<string, unknown>)?.status === "below_dri"
+      );
+      const exceedsDri = assessments.filter(a =>
+        (a.dri_assessment as Record<string, unknown>)?.status === "exceeds_limit"
+      );
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            meal_description: meal_description ?? "not provided",
+            n_nutrients_assessed: assessments.length,
+            summary: {
+              nutrients_below_dri: belowDri.map(a => (a as Record<string, unknown>).nutrient),
+              nutrients_exceeding_limit: exceedsDri.map(a => (a as Record<string, unknown>).nutrient),
+            },
+            assessments,
+            dose_context: "EP-WAS associations are population-level and observational. Most dietary nutrient effects on individual biomarkers are small (R-squared < 1%). A single meal does not determine health — long-term dietary patterns matter far more. The DRI comparison is more actionable: consistently falling below the RDA for a nutrient is a clearer signal than any individual EP-WAS association.",
+            recommendation: "For a personalized nutrition assessment, consult a registered dietitian. This tool provides population-level evidence context, not individual dietary advice.",
+          }, bigintReplacer, 2),
+        }],
+      };
+    }
+  );
+
+  // ── Tool: diet_quality ──
+
+  // Load HEI scores at registration time
+  const HEI_SCORES: Array<{ seqn: number; age: number; hei: number; cycle: string }> = [];
+  try {
+    const heiPath = path.join(__dirname, "..", "..", "data", "hei_scores.csv");
+    if (fs.existsSync(heiPath)) {
+      const lines = fs.readFileSync(heiPath, "utf-8").split("\n").filter(l => l.trim());
+      const headers = lines[0].split(",").map(h => h.replace(/"/g, "").trim());
+      const seqnIdx = headers.indexOf("SEQN");
+      const ageIdx = headers.indexOf("RIDAGEYR");
+      const heiIdx = headers.indexOf("HEI");
+      const cycleIdx = headers.indexOf("cycle");
+      for (let i = 1; i < lines.length; i++) {
+        const vals = lines[i].split(",").map(v => v.replace(/"/g, "").trim());
+        const hei = parseFloat(vals[heiIdx]);
+        if (!isNaN(hei)) {
+          HEI_SCORES.push({
+            seqn: parseInt(vals[seqnIdx]),
+            age: parseInt(vals[ageIdx]),
+            hei,
+            cycle: vals[cycleIdx] ?? "",
+          });
+        }
+      }
+      console.error(`[exposomeql] Loaded ${HEI_SCORES.length} HEI-2015 scores`);
+    }
+  } catch (err) {
+    console.error(`[exposomeql] Warning: could not load HEI scores: ${(err as Error).message}`);
+  }
+
+  server.tool(
+    "diet_quality",
+    "Analyze diet quality using the USDA Healthy Eating Index (HEI-2015) and its association with health phenotypes. Returns: (1) where a given HEI score falls in the US population distribution, (2) how HEI associates with key health markers from survey-weighted NHANES analysis, and (3) what the HEI score means for diet quality. Use when someone asks about overall diet quality, dietary patterns, or how diet relates to health outcomes. Can also compare HEI across demographic groups.",
+    {
+      hei_score: z.number().min(0).max(100).optional()
+        .describe("User's HEI score (0-100) if known. If not provided, returns population distribution."),
+      age: z.number().optional().describe("Age for subgroup comparison"),
+      sex: z.enum(["male", "female"]).optional().describe("Sex for subgroup comparison"),
+      compare_nutrient_r2: z.boolean().optional().default(false)
+        .describe("If true, compare HEI R² against individual nutrient R² for key phenotypes"),
+    },
+    async ({ hei_score, age, sex, compare_nutrient_r2 }) => {
+      if (HEI_SCORES.length === 0) {
+        return { content: [{ type: "text" as const, text: "HEI scores not available. Run scripts/compute-hei.R first to generate data/hei_scores.csv." }] };
+      }
+
+      // Population distribution
+      const allHei = HEI_SCORES.map(s => s.hei).sort((a, b) => a - b);
+      const n = allHei.length;
+      const mean = allHei.reduce((a, b) => a + b, 0) / n;
+      const p25 = allHei[Math.floor(n * 0.25)];
+      const p50 = allHei[Math.floor(n * 0.50)];
+      const p75 = allHei[Math.floor(n * 0.75)];
+      const p10 = allHei[Math.floor(n * 0.10)];
+      const p90 = allHei[Math.floor(n * 0.90)];
+
+      // Subgroup if age/sex provided
+      let subgroupStats: Record<string, unknown> | null = null;
+      if (age) {
+        const sub = HEI_SCORES.filter(s => Math.abs(s.age - age) <= 5);
+        if (sub.length > 30) {
+          const subHei = sub.map(s => s.hei).sort((a, b) => a - b);
+          const sn = subHei.length;
+          subgroupStats = {
+            description: `Age ${age - 5}-${age + 5}`,
+            n: sn,
+            mean: Math.round(subHei.reduce((a, b) => a + b, 0) / sn * 10) / 10,
+            median: Math.round(subHei[Math.floor(sn * 0.5)] * 10) / 10,
+            p25: Math.round(subHei[Math.floor(sn * 0.25)] * 10) / 10,
+            p75: Math.round(subHei[Math.floor(sn * 0.75)] * 10) / 10,
+          };
+        }
+      }
+
+      // User's percentile
+      let userContext: Record<string, unknown> | null = null;
+      if (hei_score !== undefined) {
+        const rank = allHei.filter(h => h <= hei_score).length;
+        const percentile = Math.round(100 * rank / n);
+
+        let quality: string;
+        if (hei_score >= 80) quality = "Good — your diet quality is in the top tier of the US population";
+        else if (hei_score >= 60) quality = "Needs improvement — better than average but room to improve";
+        else if (hei_score >= 40) quality = "Poor — below the US average of 53; consider increasing fruits, vegetables, whole grains";
+        else quality = "Very poor — in the bottom quartile; significant dietary improvements recommended";
+
+        userContext = {
+          hei_score: Math.round(hei_score * 10) / 10,
+          percentile,
+          quality_rating: quality,
+          comparison: `Your HEI of ${Math.round(hei_score)} is ${hei_score > mean ? "above" : "below"} the US population mean of ${Math.round(mean)} (${hei_score > mean ? "+" : ""}${Math.round(hei_score - mean)} points)`,
+        };
+      }
+
+      // HEI → phenotype associations (pre-computed from our R analysis)
+      const phenotypeAssociations = [
+        { phenotype: "HbA1c (%)", r2: 0.0002, beta: -0.0047, p: 0.002, interpretation: "Higher diet quality weakly associated with lower HbA1c. A 20-point HEI improvement (~P25→P75) corresponds to ~0.09% lower HbA1c — clinically negligible." },
+        { phenotype: "Triglycerides (mg/dL)", r2: 0.0023, beta: -0.683, p: 0.0002, interpretation: "Strongest diet quality association. A 20-point HEI improvement corresponds to ~14 mg/dL lower triglycerides — small but meaningful." },
+        { phenotype: "Uric acid (mg/dL)", r2: 0.0039, beta: -0.0044, p: 0.042, interpretation: "Higher diet quality weakly associated with lower uric acid. Effect is borderline significant and very small." },
+        { phenotype: "Hemoglobin (g/dL)", r2: 0.0065, beta: -0.0049, p: 0.007, interpretation: "Higher diet quality associated with slightly lower hemoglobin — likely confounded by lower red meat consumption in healthier diets." },
+        { phenotype: "Total cholesterol (mg/dL)", r2: 0.0038, beta: -0.004, p: 0.95, interpretation: "No significant association between diet quality and total cholesterol after adjustment." },
+      ];
+
+      // Compare HEI R² vs individual nutrient R² if requested
+      let nutrientComparison: Record<string, unknown> | null = null;
+      if (compare_nutrient_r2) {
+        nutrientComparison = {
+          note: "Comparing R² of overall diet quality (HEI) vs individual dietary nutrients for key phenotypes",
+          comparison: [
+            { phenotype: "HbA1c", hei_r2: "0.02%", individual_nutrient_median_r2: "0.6%", winner: "Individual nutrients (but both are tiny)" },
+            { phenotype: "Triglycerides", hei_r2: "0.23%", individual_nutrient_median_r2: "0.6%", winner: "Similar — both explain <1%" },
+            { phenotype: "Total cholesterol", hei_r2: "0.38%", individual_nutrient_median_r2: "0.6%", winner: "Similar — both explain <1%" },
+          ],
+          conclusion: "Neither overall diet quality (HEI) nor individual dietary nutrients explain more than ~1% of phenotypic variance in cross-sectional NHANES data. This reflects the fundamental limitation of 24-hour dietary recall: it captures a single day's intake with substantial measurement error, not long-term dietary patterns. The small R² values do NOT mean diet doesn't matter — they mean self-reported diet is a poor proxy for actual nutritional status. Serum biomarkers (vitamin D, folate, etc.) show much stronger associations.",
+        };
+      }
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            index: "Healthy Eating Index 2015 (HEI-2015)",
+            description: "The HEI measures conformance to the Dietary Guidelines for Americans on a 0-100 scale. Higher scores = better diet quality. Scored across 13 components: fruits, vegetables, whole grains, dairy, protein, seafood/plant protein, fatty acid ratio, refined grains, sodium, added sugars, and saturated fats.",
+            population_distribution: {
+              source: "NHANES 2011-2014 (n=" + n + ")",
+              mean: Math.round(mean * 10) / 10,
+              median: Math.round(p50 * 10) / 10,
+              p10: Math.round(p10 * 10) / 10,
+              p25: Math.round(p25 * 10) / 10,
+              p75: Math.round(p75 * 10) / 10,
+              p90: Math.round(p90 * 10) / 10,
+              interpretation: "The US population mean HEI is ~53/100, indicating substantial room for dietary improvement nationally.",
+            },
+            user_context: userContext,
+            subgroup: subgroupStats,
+            health_associations: {
+              method: "Survey-weighted linear regression (NHANES 2013-2014, model: phenotype ~ HEI + age + sex)",
+              results: phenotypeAssociations,
+              overall: "Diet quality (HEI) explains less than 1% of variance in any individual health biomarker. The strongest association is with triglycerides (R²=0.23%). This does NOT mean diet is unimportant — it means that a single day's self-reported intake poorly captures the dietary patterns that actually affect health.",
+            },
+            nutrient_comparison: nutrientComparison,
+            dose_context: "A 20-point improvement in HEI (e.g., moving from P25 to P75 of the population) would be associated with ~14 mg/dL lower triglycerides and ~0.09% lower HbA1c. These are population averages from cross-sectional data — individual responses to dietary change will vary widely and are typically larger in intervention studies than observational associations suggest.",
+          }, null, 2),
+        }],
+      };
+    }
+  );
+
+  // ── Tool: nhanes_sensitivity ──
+
+  server.tool(
+    "nhanes_sensitivity",
+    "Run a sensitivity analysis to mitigate reverse causality in cross-sectional NHANES data. Re-estimates an exposure-phenotype association after excluding individuals with diagnosed disease, adjusting for disease as a covariate, or both. IMPORTANT: This tool should ALWAYS be used when examining cardiometabolic phenotypes (glucose, HbA1c, insulin, cholesterol, triglycerides, uric acid, creatinine, blood pressure, BMI, CRP) because these are strongly affected by prevalent disease and medication use in cross-sectional data. Example: gamma-tocopherol → glucose attenuates by 65% after excluding diagnosed individuals, revealing that most of the association is driven by metabolic disease status, not the exposure itself.",
+    {
+      exposure: z.string().describe("Exposure variable (e.g., 'LBXPFOA', 'LBXBPB')"),
+      phenotype: z.string().describe("Phenotype variable (e.g., 'LBXSCH', 'LBXSUA')"),
+      exclusions: z.array(z.enum([
+        "diabetes",
+        "hypertension",
+        "high_cholesterol",
+        "heart_disease",
+        "kidney_disease",
+        "liver_disease",
+        "cancer",
+        "overweight",
+        "poor_health",
+        "all_diagnosed",
+      ])).optional().default(["all_diagnosed"])
+        .describe("Conditions to exclude. 'all_diagnosed' excludes anyone with any diagnosed chronic disease."),
+      strategy: z.enum(["exclude", "adjust", "both"]).optional().default("exclude")
+        .describe("How to handle disease status: 'exclude' removes diagnosed individuals; 'adjust' adds disease variables as covariates; 'both' runs both for comparison"),
+      adjust_bmi: z.boolean().optional().default(false)
+        .describe("Additionally adjust for BMI (adds BMXBMI as covariate)"),
+      cycles: z.array(z.string()).optional()
+        .describe("NHANES cycles (default: most recent available)"),
+    },
+    async ({ exposure, phenotype, exclusions, strategy, adjust_bmi, cycles }) => {
+      const eRes = await ctx.resolver.resolve(exposure);
+      if (!eRes.resolved) {
+        return { content: [{ type: "text" as const, text: eRes.candidates ? `Ambiguous exposure "${exposure}". Candidates:\n${formatCandidates(eRes)}` : `Exposure "${exposure}" not found.` }] };
+      }
+      const pRes = await ctx.resolver.resolve(phenotype);
+      if (!pRes.resolved) {
+        return { content: [{ type: "text" as const, text: pRes.candidates ? `Ambiguous phenotype "${phenotype}". Candidates:\n${formatCandidates(pRes)}` : `Phenotype "${phenotype}" not found.` }] };
+      }
+
+      const eVar = eRes.variable!.variableName;
+      const pVar = pRes.variable!.variableName;
+
+      // Map exclusion categories to NHANES variables and codes
+      // These are "ever been told by a doctor" questions: 1=Yes, 2=No
+      const exclusionMap: Record<string, { var: string; code: number; label: string }[]> = {
+        diabetes: [{ var: "DIQ010", code: 1, label: "Diagnosed diabetes" }],
+        hypertension: [{ var: "BPQ020", code: 1, label: "Diagnosed hypertension" }],
+        high_cholesterol: [{ var: "BPQ080", code: 1, label: "Diagnosed high cholesterol" }],
+        heart_disease: [
+          { var: "MCQ160B", code: 1, label: "Congestive heart failure" },
+          { var: "MCQ160C", code: 1, label: "Coronary heart disease" },
+          { var: "MCQ160D", code: 1, label: "Angina/angina pectoris" },
+          { var: "MCQ160E", code: 1, label: "Heart attack" },
+        ],
+        kidney_disease: [{ var: "KIQ022", code: 1, label: "Diagnosed kidney disease" }],
+        liver_disease: [{ var: "MCQ160L", code: 1, label: "Diagnosed liver condition" }],
+        cancer: [{ var: "MCQ220", code: 1, label: "Ever told had cancer" }],
+        overweight: [{ var: "MCQ080", code: 1, label: "Doctor said overweight" }],
+        poor_health: [{ var: "HUQ010", code: 4, label: "Self-reported fair health" }, { var: "HUQ010", code: 5, label: "Self-reported poor health" }],
+      };
+
+      // Build exclusion filters
+      const appliedExclusions = exclusions ?? ["all_diagnosed"];
+      const excludeVars: { var: string; code: number; label: string }[] = [];
+
+      if (appliedExclusions.includes("all_diagnosed")) {
+        for (const [, conditions] of Object.entries(exclusionMap)) {
+          excludeVars.push(...conditions);
+        }
+      } else {
+        for (const excl of appliedExclusions) {
+          if (exclusionMap[excl]) {
+            excludeVars.push(...exclusionMap[excl]);
+          }
+        }
+      }
+
+      // Build R subgroup expression that EXCLUDES diagnosed individuals
+      // HUQ010: 1=Excellent, 2=Very good, 3=Good, 4=Fair, 5=Poor
+      // Disease questions: 1=Yes, 2=No → exclude when ==1
+      const filterParts: string[] = [];
+      for (const ev of excludeVars) {
+        if (ev.var === "HUQ010") {
+          // For poor health: exclude codes 4 and 5
+          filterParts.push(`(${ev.var} <= 3 | is.na(${ev.var}))`);
+        } else {
+          // For disease diagnosis: exclude code 1 (yes)
+          filterParts.push(`(${ev.var} != 1 | is.na(${ev.var}))`);
+        }
+      }
+      const exclusionFilter = filterParts.join(" & ");
+
+      // Build disease composite variable for adjustment strategy
+      // Create a single binary: 1=any diagnosed disease, 0=none
+      const diseaseVarNames = [...new Set(excludeVars.filter(e => e.var !== "HUQ010").map(e => e.var))];
+      const compositeExpr = diseaseVarNames.length > 0
+        ? `(${diseaseVarNames.map(v => `(${v} == 1)`).join(" | ")})`
+        : "FALSE";
+
+      const extraCovariates = adjust_bmi ? " + BMXBMI" : "";
+      const selectedStrategy = strategy ?? "exclude";
+
+      try {
+        // Always get the unrestricted (base) estimate for comparison
+        const baseResult = await ctx.rExec.execute("nhanes_analyze.R", {
+          exposure: eVar,
+          outcome: pVar,
+          cycles: cycles ? mapCyclesToSeries(cycles) : null,
+          subgroup: null,
+        });
+
+        const baseM6 = (baseResult as Record<string, unknown>).model_6 as Record<string, unknown> | undefined;
+        const baseBeta = baseM6?.estimate as number ?? null;
+        const baseP = baseM6?.p_value as number ?? null;
+        const baseN = baseM6?.n as number ?? null;
+
+        const analyses: Record<string, unknown> = {};
+
+        // Strategy: EXCLUDE — remove diagnosed individuals
+        if (selectedStrategy === "exclude" || selectedStrategy === "both") {
+          const excludeResult = await ctx.rExec.execute("nhanes_analyze.R", {
+            exposure: eVar,
+            outcome: pVar,
+            cycles: cycles ? mapCyclesToSeries(cycles) : null,
+            subgroup: exclusionFilter + (adjust_bmi ? " & !is.na(BMXBMI)" : ""),
+          });
+          const exclM6 = (excludeResult as Record<string, unknown>).model_6 as Record<string, unknown> | undefined;
+          analyses.excluded = {
+            strategy: "exclude_diagnosed",
+            beta: exclM6?.estimate as number ?? null,
+            p_value: exclM6?.p_value as number ?? null,
+            n: exclM6?.n as number ?? null,
+            filter: exclusionFilter,
+          };
+        }
+
+        // Strategy: ADJUST — add disease as covariate
+        if (selectedStrategy === "adjust" || selectedStrategy === "both") {
+          // For adjust strategy, we need to pass disease variables as additional covariates
+          // We'll use the composite disease indicator
+          const adjustSubgroup = adjust_bmi ? "!is.na(BMXBMI)" : null;
+          const adjustResult = await ctx.rExec.execute("nhanes_analyze.R", {
+            exposure: eVar,
+            outcome: pVar,
+            cycles: cycles ? mapCyclesToSeries(cycles) : null,
+            subgroup: adjustSubgroup,
+            // Pass disease variables as additional adjustment covariates
+            additional_covariates: diseaseVarNames.concat(adjust_bmi ? ["BMXBMI"] : []),
+          });
+          const adjM6 = (adjustResult as Record<string, unknown>).model_6 as Record<string, unknown> | undefined;
+          analyses.adjusted = {
+            strategy: "adjust_for_disease",
+            beta: adjM6?.estimate as number ?? null,
+            p_value: adjM6?.p_value as number ?? null,
+            n: adjM6?.n as number ?? null,
+            covariates_added: diseaseVarNames.concat(adjust_bmi ? ["BMXBMI"] : []),
+          };
+        }
+
+        // Interpret results
+        const comparisons: Array<Record<string, unknown>> = [];
+        for (const [label, result] of Object.entries(analyses)) {
+          const r = result as Record<string, unknown>;
+          const sensBeta = r.beta as number | null;
+          if (baseBeta !== null && sensBeta !== null) {
+            const dirChange = Math.sign(baseBeta as number) !== Math.sign(sensBeta);
+            const magChange = Math.abs(sensBeta - (baseBeta as number)) / Math.max(Math.abs(baseBeta as number), 0.001);
+
+            let interp: string;
+            if (dirChange) {
+              interp = "DIRECTION REVERSAL — strongly suggests reverse causality. The original association is driven by disease status affecting the exposure.";
+            } else if (magChange > 0.5) {
+              interp = "SUBSTANTIAL ATTENUATION (>50%) — the association is largely driven by reverse causality or confounding by disease status.";
+            } else if (magChange > 0.2) {
+              interp = "MODERATE ATTENUATION (20-50%) — partially confounded by disease status, but core signal persists.";
+            } else {
+              interp = "ROBUST (<20% change) — stable after accounting for disease status. Supports forward-causal interpretation.";
+            }
+
+            comparisons.push({
+              strategy: label,
+              beta_original: baseBeta,
+              beta_sensitivity: sensBeta,
+              percent_change: Math.round(100 * magChange) + "%",
+              direction_reversed: dirChange,
+              interpretation: interp,
+            });
+          }
+        }
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              exposure: eVar,
+              phenotype: pVar,
+              exposure_description: eRes.variable!.description,
+              phenotype_description: pRes.variable!.description,
+              config: {
+                strategy: selectedStrategy,
+                conditions: excludeVars.map(e => e.label),
+                bmi_adjusted: adjust_bmi ?? false,
+              },
+              unrestricted: { beta: baseBeta, p_value: baseP, n: baseN },
+              sensitivity_results: analyses,
+              comparisons,
+              note: "Sensitivity analysis to mitigate reverse causality in cross-sectional data. 'Exclude' removes diagnosed individuals entirely; 'adjust' adds disease status as covariates. Both approaches have trade-offs: exclusion reduces sample size and may remove individuals with highest exposures; adjustment assumes the disease-exposure relationship is linear and correctly specified. A robust association that survives both strategies is more likely to represent a forward-causal pathway.",
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error running sensitivity analysis: ${(err as Error).message}. This tool requires R with the survey and nhanespewas packages.` }] };
+      }
+    }
+  );
+
+  // ── Tool: measurement_uncertainty ──
+
+  /** Within-person variation estimates from NHANES repeat measurements */
+  const MEASUREMENT_UNCERTAINTY: Record<string, { variable: string; description: string; within_sd: number; unit: string; source: string; n: number; interpretation: string }> = {
+    BPXSY4: { variable: "BPXSY4", description: "Systolic blood pressure", within_sd: 3.0, unit: "mmHg", source: "3-4 readings per visit (BPX_J)", n: 6187, interpretation: "A single BP reading has ±6 mmHg uncertainty (95%). Small EP-WAS effects (<2 mmHg) are invisible within this noise." },
+    MSYSTOLIC: { variable: "MSYSTOLIC", description: "Systolic BP (mean)", within_sd: 3.0, unit: "mmHg", source: "3-4 readings per visit", n: 6187, interpretation: "Averaged across readings, but still has ±6 mmHg single-reading uncertainty." },
+    MDIASTOLIC: { variable: "MDIASTOLIC", description: "Diastolic BP (mean)", within_sd: 2.5, unit: "mmHg", source: "3-4 readings per visit", n: 6187, interpretation: "Similar within-visit variation as systolic." },
+    DR1TVD: { variable: "DR1TVD", description: "Vitamin D dietary intake", within_sd: 6.4, unit: "mcg", source: "Day 1 vs Day 2 recall (DR1TOT_J vs DR2TOT_J)", n: 8704, interpretation: "Day-to-day correlation = 0.28. A single 24h recall captures <8% of variance in usual intake. Extremely noisy." },
+    DR1TCALC: { variable: "DR1TCALC", description: "Calcium dietary intake", within_sd: 620, unit: "mg", source: "Day 1 vs Day 2 recall", n: 8704, interpretation: "Day-to-day correlation = 0.37. Single recall is a poor proxy for usual calcium intake." },
+    DR1TSODI: { variable: "DR1TSODI", description: "Sodium dietary intake", within_sd: 1869, unit: "mg", source: "Day 1 vs Day 2 recall", n: 8704, interpretation: "Day-to-day correlation = 0.43. Single day sodium varies by ±3700 mg (95%) — nearly the entire daily recommended limit." },
+    DR1TFIBE: { variable: "DR1TFIBE", description: "Fiber dietary intake", within_sd: 10.4, unit: "g", source: "Day 1 vs Day 2 recall", n: 8704, interpretation: "Day-to-day correlation = 0.47. Single day fiber intake is highly variable." },
+    DR1TKCAL: { variable: "DR1TKCAL", description: "Energy (calories)", within_sd: 960, unit: "kcal", source: "Day 1 vs Day 2 recall", n: 8704, interpretation: "Day-to-day correlation = 0.48. A single day's caloric intake varies by ±1900 kcal (95%)." },
+  };
+
+  server.tool(
+    "measurement_uncertainty",
+    "Quantify the measurement uncertainty for a single NHANES measurement based on within-person repeat data. Uses blood pressure (3-4 readings per visit) and dietary recall (Day 1 vs Day 2) to show how much noise exists in a single observation. Critical for interpreting EP-WAS effect sizes: if the exposure effect is smaller than measurement uncertainty, an individual cannot meaningfully detect that effect. Helps answer: 'How much can I trust a single measurement?'",
+    {
+      variable: z.string().describe("NHANES variable to assess (e.g., 'BPXSY4', 'DR1TVD', 'DR1TSODI')"),
+      measured_value: z.number().optional().describe("User's actual measured value (optional — if provided, shows uncertainty range around it)"),
+      epwas_beta: z.number().optional().describe("Optional EP-WAS beta for comparison — shows how the effect size compares to measurement noise"),
+    },
+    async ({ variable, measured_value, epwas_beta }) => {
+      const vRes = await ctx.resolver.resolve(variable);
+      const varName = vRes.resolved ? vRes.variable!.variableName : variable.toUpperCase();
+
+      const uncertainty = MEASUREMENT_UNCERTAINTY[varName];
+
+      if (!uncertainty) {
+        // Check if it's a dietary variable we can estimate from
+        const isDietary = varName.startsWith("DR1") || varName.startsWith("DR2");
+        const isBP = varName.startsWith("BPX") || varName === "MSYSTOLIC" || varName === "MDIASTOLIC";
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              variable: varName,
+              status: "no_repeat_data",
+              message: isDietary
+                ? "Dietary recall variables have day-to-day correlations of 0.28-0.48 based on DR1/DR2 data. A single 24h recall captures less than 25% of the variance in usual intake."
+                : isBP
+                  ? "Blood pressure has within-visit SD of ~3 mmHg based on 3-4 repeated readings."
+                  : "No within-person repeat measurement data available for this variable in NHANES. Most lab biomarkers (LBX*) are single measurements with analytical CV typically 2-10%.",
+              available_variables: Object.keys(MEASUREMENT_UNCERTAINTY),
+            }, null, 2),
+          }],
+        };
+      }
+
+      const ci95 = 1.96 * uncertainty.within_sd;
+
+      let valueContext: Record<string, unknown> | null = null;
+      if (measured_value !== undefined) {
+        valueContext = {
+          measured: measured_value,
+          uncertainty_range_95: `${(measured_value - ci95).toFixed(1)} to ${(measured_value + ci95).toFixed(1)} ${uncertainty.unit}`,
+          interpretation: `Your single measurement of ${measured_value} could reflect a true value anywhere from ${(measured_value - ci95).toFixed(1)} to ${(measured_value + ci95).toFixed(1)} based on within-person variation alone.`,
+        };
+      }
+
+      let effectComparison: Record<string, unknown> | null = null;
+      if (epwas_beta !== undefined) {
+        const ratio = Math.abs(epwas_beta) / uncertainty.within_sd;
+        let detectable: string;
+        if (ratio < 0.1) {
+          detectable = "UNDETECTABLE — the exposure effect is less than 10% of measurement noise. An individual could never perceive this effect.";
+        } else if (ratio < 0.3) {
+          detectable = "VERY DIFFICULT to detect — the effect is much smaller than normal measurement variation. Would require many repeated measurements to distinguish from noise.";
+        } else if (ratio < 1.0) {
+          detectable = "DIFFICULT to detect — the effect is smaller than typical measurement variation. Detectable only in large populations, not individuals.";
+        } else {
+          detectable = "POTENTIALLY DETECTABLE — the effect is comparable to or larger than measurement noise. May be observable at the individual level with careful repeated measurement.";
+        }
+
+        effectComparison = {
+          epwas_beta,
+          within_person_sd: uncertainty.within_sd,
+          signal_to_noise_ratio: Math.round(ratio * 100) / 100,
+          detectability: detectable,
+        };
+      }
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            variable: varName,
+            description: uncertainty.description,
+            within_person_variation: {
+              sd: uncertainty.within_sd,
+              ci95_range: `±${ci95.toFixed(1)} ${uncertainty.unit}`,
+              unit: uncertainty.unit,
+              source: uncertainty.source,
+              n_participants: uncertainty.n,
+            },
+            interpretation: uncertainty.interpretation,
+            your_measurement: valueContext,
+            effect_vs_noise: effectComparison,
+            key_message: "A single measurement is a snapshot with substantial uncertainty. Population-level EP-WAS effects are typically much smaller than this uncertainty. This does NOT mean the effects are unreal — they accumulate over time and across populations — but an individual cannot detect them from a single measurement.",
+          }, null, 2),
+        }],
+      };
+    }
+  );
+
+  // ── Tool: find_doppelgangers ──
+
+  server.tool(
+    "find_doppelgangers",
+    "Given a user's exposure and demographic profile, find the NHANES participants who most closely match and report their actual health outcome distributions. This provides empirical conditional distributions — 'among people like you, here is what their cholesterol/glucose/BP looks like' — rather than applying regression coefficients to individuals. Addresses the β_between ≠ β_within problem by showing actual observed distributions instead of predicted values.",
+    {
+      age: z.number().describe("Age in years"),
+      sex: z.enum(["male", "female"]).describe("Sex"),
+      exposures: z.array(z.object({
+        variable: z.string().describe("NHANES variable code (e.g., 'LBXBPB' for blood lead)"),
+        value: z.number().describe("Your measured value"),
+      })).optional().describe("Your actual measured exposure values (if available)"),
+      phenotypes: z.array(z.string()).optional()
+        .describe("Health outcomes to report (e.g., ['LBXGH', 'LBXSCH', 'BPXSY4']). Default: key cardiometabolic markers."),
+      race_ethnicity: z.enum(["mexican_american", "other_hispanic", "non_hispanic_white", "non_hispanic_black", "non_hispanic_asian", "other_multiracial"]).optional(),
+      match_window: z.number().optional().default(0.5)
+        .describe("How tightly to match on exposures: 0.5 = ±0.5 SD (strict), 1.0 = ±1 SD (loose)"),
+    },
+    async ({ age, sex, exposures, phenotypes, race_ethnicity, match_window }) => {
+      const defaultPhenotypes = ["LBXGH", "LBXSCH", "LBXSTR", "LBXCRP", "LBXSUA", "BPXSY4", "BMXBMI", "LBXHGB"];
+      const targetPhenotypes = phenotypes ?? defaultPhenotypes;
+      const window = match_window ?? 0.5;
+
+      // Build the subgroup filter for demographics
+      const ageMin = age - 5;
+      const ageMax = age + 5;
+      const sexCode = sex === "male" ? 1 : 2;
+
+      const raceMap: Record<string, number> = {
+        mexican_american: 1, other_hispanic: 2, non_hispanic_white: 3,
+        non_hispanic_black: 4, non_hispanic_asian: 6, other_multiracial: 7,
+      };
+
+      // Use R to query individual-level NHANES data and find matches
+      try {
+        // Build exposure matching criteria
+        const exposureFilters: string[] = [];
+        const exposureDescriptions: Array<Record<string, unknown>> = [];
+
+        if (exposures && exposures.length > 0) {
+          for (const exp of exposures) {
+            const eRes = await ctx.resolver.resolve(exp.variable);
+            const varName = eRes.resolved ? eRes.variable!.variableName : exp.variable.toUpperCase();
+            // We'll pass these to R for matching
+            exposureFilters.push(`${varName}:${exp.value}`);
+            exposureDescriptions.push({
+              variable: varName,
+              description: eRes.variable?.description ?? varName,
+              your_value: exp.value,
+            });
+          }
+        }
+
+        // Execute R matching script
+        const rResult = await ctx.rExec.execute("nhanes_doppelganger.R", {
+          age_min: ageMin,
+          age_max: ageMax,
+          sex_code: sexCode,
+          race_code: race_ethnicity ? raceMap[race_ethnicity] ?? null : null,
+          exposure_filters: exposureFilters,
+          match_window: window,
+          phenotypes: targetPhenotypes,
+        });
+
+        const result = rResult as Record<string, unknown>;
+
+        // Enrich phenotype descriptions
+        const phenotypeResults: Array<Record<string, unknown>> = [];
+        if (result.phenotype_distributions) {
+          for (const pd of result.phenotype_distributions as Array<Record<string, unknown>>) {
+            const pVar = ctx.resolver.get(pd.variable as string);
+            phenotypeResults.push({
+              ...pd,
+              description: pVar?.description ?? pd.variable,
+            });
+          }
+        }
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              profile: {
+                age_range: `${ageMin}-${ageMax}`,
+                sex,
+                race_ethnicity: race_ethnicity ?? "any",
+                exposures: exposureDescriptions,
+              },
+              matching: {
+                n_matched: result.n_matched,
+                n_demographic_pool: result.n_demographic,
+                match_window_sd: window,
+                method: exposures && exposures.length > 0
+                  ? "Demographic match + exposure percentile matching (±" + window + " SD)"
+                  : "Demographic match only (age ±5, sex" + (race_ethnicity ? ", race/ethnicity" : "") + ")",
+              },
+              phenotype_distributions: phenotypeResults,
+              interpretation: `Among the ${result.n_matched} NHANES participants who match your demographic and exposure profile, these are the observed distributions of health markers. These are EMPIRICAL distributions from real people — not regression predictions. They reflect what people like you actually have, including all the confounding and reverse causality present in cross-sectional data.`,
+              important_caveats: [
+                "These distributions show what similar people HAVE, not what your exposures CAUSE.",
+                "Cross-sectional matching cannot distinguish β_between (population confounding) from β_within (individual causal effects).",
+                "A matched group's higher glucose could reflect shared diet patterns, not the specific exposure you matched on.",
+                "For causal inference about YOUR response to changing an exposure, longitudinal or n-of-1 data would be needed.",
+                "Small matched sample sizes (<50) produce unreliable distributions.",
+              ],
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        // If R script doesn't exist yet, fall back to SQL-only demographic matching
+        try {
+          // SQL-only approach: get demographic matches and report phenotype distributions
+          // This won't match on exposures but gives the demographic baseline
+          let whereClause = `RIDAGEYR >= ${ageMin} AND RIDAGEYR <= ${ageMax} AND RIAGENDR = ${sexCode}`;
+          if (race_ethnicity && raceMap[race_ethnicity]) {
+            whereClause += ` AND RIDRETH3 = ${raceMap[race_ethnicity]}`;
+          }
+
+          // Query phenotype means from the most recent cycle via SQL
+          const phenoResults: Array<Record<string, unknown>> = [];
+          for (const pVar of targetPhenotypes) {
+            try {
+              // Try to find the variable in a recent cycle table
+              const pDesc = ctx.resolver.get(pVar);
+              // Use the EP-WAS variable catalog to get the population percentiles
+              const rows = await ctx.db.query(
+                `SELECT "estimate.uwls" as est FROM pe_stats.adjusted_meta_uwls
+                 WHERE expo_name = 'expo' AND pvarname = $1 AND CAST(model_number AS INTEGER) = 1
+                 LIMIT 1`,
+                pVar
+              );
+
+              phenoResults.push({
+                variable: pVar,
+                description: pDesc?.description ?? pVar,
+                note: "Full distribution requires R subprocess. Use demographic context from EP-WAS catalog.",
+                available: rows.length > 0,
+              });
+            } catch { /* skip */ }
+          }
+
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                profile: { age_range: `${ageMin}-${ageMax}`, sex, race_ethnicity: race_ethnicity ?? "any" },
+                note: "Full doppelganger matching requires the R subprocess (nhanes_doppelganger.R). Returning demographic context only. For full matching, ensure R is available with the survey and nhanespewas packages.",
+                demographic_match: whereClause,
+                phenotypes_requested: phenoResults,
+                suggestion: "Use the exposure_profile tool for individual chemical contextualization, or nhanes_conditional for phenotype distributions conditional on exposure levels.",
+              }, null, 2),
+            }],
+          };
+        } catch (fallbackErr) {
+          return { content: [{ type: "text" as const, text: `Error: ${(fallbackErr as Error).message}` }] };
+        }
+      }
+    }
+  );
+
+  console.error(`[exposomeql] Registered 52 tools (6 Class 1, 5 Class 2, 6 Class 3, 9 HHEAR, 1 Chemical, 5 CTD, 4 Cross-cutting, 5 Nutrient, 3 Diagnostics, 2 Evidence, 1 Personal, 1 Diet, 1 DietQuality, 1 Sensitivity, 2 N-of-1)`);
 }
 
 /** Find a cohort config by ID */

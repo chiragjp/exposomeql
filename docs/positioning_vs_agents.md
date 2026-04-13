@@ -45,7 +45,7 @@ ExposomeQL operates on **the data itself** — not the literature about the data
 
 2. **"Does the PFOA-cholesterol association show Simpson's paradox?"** — This requires comparing pooled vs cycle-specific estimates from the same dataset. Literature agents can only report what individual papers found; ExposomeQL detects the paradox computationally.
 
-3. **"Is the dietary recall evidence for iron concordant with RCT meta-analyses?"** — This requires querying the EP-WAS atlas for iron-hemoglobin associations AND comparing direction against curated RCT evidence. ExposomeQL returns: 0% concordance (fully discordant — dietary recall is confounded).
+3. **"Is the dietary recall evidence for iron concordant with published meta-analyses?"** — This requires querying the EP-WAS atlas for iron-hemoglobin associations AND comparing direction against curated meta-analytic evidence (predominantly RCTs). ExposomeQL returns: 0% concordance (fully discordant — dietary recall is confounded).
 
 4. **"Run a dose-response analysis of blood lead vs kidney function using restricted cubic splines."** — This runs actual R code on NHANES microdata with proper survey weights. No literature agent can do this.
 
@@ -87,8 +87,8 @@ BioMCP is the closest existing MCP server to ExposomeQL. Both use the Model Cont
 | Epidemiological methods | None | Survey weights, LOD, cell size, multiple testing, cycle pooling |
 | Environmental exposures | Not covered | 804 exposures × 346 phenotypes = 165K+ meta-analytic tests |
 | Cohort data | None | 35+ HHEAR cohorts with individual-level biomonitoring |
-| Triangulation | None | 3-source (EP-WAS + CTD + HHEAR) + nutrient (EP-WAS + RCT) |
-| Tools | 12 entities | 44 tools + 12 resources |
+| Triangulation | None | 3-source (EP-WAS + CTD + HHEAR) + nutrient (EP-WAS + meta-analytic evidence) |
+| Tools | 12 entities | 46 tools + 17 resources |
 
 **BioMCP tells you what papers say about a gene variant. ExposomeQL tells you what the data shows about an environmental exposure's effect on health across 100,000 participants.**
 
