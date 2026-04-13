@@ -122,10 +122,25 @@ export class RExecutor {
         }
 
         if (code !== 0) {
+          // R scripts emit controlled errors as JSON on stdout before quit(status=1).
+          // Surface that message if present; otherwise fall back to stderr.
+          let scriptError: string | null = null;
+          const jStart = stdout.indexOf("{");
+          const jEnd = stdout.lastIndexOf("}");
+          if (jStart !== -1 && jEnd > jStart) {
+            try {
+              const parsed = JSON.parse(stdout.slice(jStart, jEnd + 1)) as { error?: unknown };
+              if (parsed && typeof parsed.error === "string") {
+                scriptError = parsed.error;
+              }
+            } catch { /* fall through to stderr */ }
+          }
           settle(
             reject,
             new Error(
-              `R script ${scriptName} exited with code ${code}\nstderr: ${stderr}`
+              scriptError
+                ? `R script ${scriptName} error: ${scriptError}`
+                : `R script ${scriptName} exited with code ${code}\nstderr: ${stderr}`
             )
           );
           return;

@@ -6152,58 +6152,63 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
       const selectedStrategy = strategy ?? "exclude";
 
       try {
-        // Always get the unrestricted (base) estimate for comparison
-        const baseResult = await ctx.rExec.execute("nhanes_analyze.R", {
+        const seriesArg = cycles ? mapCyclesToSeries(cycles) : null;
+
+        // Baseline — pooled, no subgroup, no extra adjustment.
+        // Extras for BMI are passed as additional_covariates (merged cycle-by-cycle)
+        // when the user requests BMI adjustment, since we want the same sample
+        // across base vs. sensitivity fits.
+        const baseResult = await ctx.rExec.execute("nhanes_sensitivity.R", {
           exposure: eVar,
           outcome: pVar,
-          cycles: cycles ? mapCyclesToSeries(cycles) : null,
+          cycles: seriesArg,
           subgroup: null,
+          additional_covariates: adjust_bmi ? ["BMXBMI"] : null,
         });
 
         const baseM6 = (baseResult as Record<string, unknown>).model_6 as Record<string, unknown> | undefined;
-        const baseBeta = baseM6?.estimate as number ?? null;
-        const baseP = baseM6?.p_value as number ?? null;
-        const baseN = baseM6?.n as number ?? null;
+        const baseBeta = (baseM6?.estimate as number | null | undefined) ?? null;
+        const baseP = (baseM6?.p_value as number | null | undefined) ?? null;
+        const baseN = (baseM6?.n as number | null | undefined) ?? null;
+        const basePooling = (baseResult as Record<string, unknown>).pooling_note as string | undefined;
 
         const analyses: Record<string, unknown> = {};
 
-        // Strategy: EXCLUDE — remove diagnosed individuals
+        // Strategy: EXCLUDE — drop diagnosed individuals via subgroup filter.
         if (selectedStrategy === "exclude" || selectedStrategy === "both") {
-          const excludeResult = await ctx.rExec.execute("nhanes_analyze.R", {
+          const excludeResult = await ctx.rExec.execute("nhanes_sensitivity.R", {
             exposure: eVar,
             outcome: pVar,
-            cycles: cycles ? mapCyclesToSeries(cycles) : null,
-            subgroup: exclusionFilter + (adjust_bmi ? " & !is.na(BMXBMI)" : ""),
+            cycles: seriesArg,
+            subgroup: exclusionFilter,
+            // Need the disease vars merged so the subgroup expression can reference them.
+            additional_covariates: diseaseVarNames.concat(adjust_bmi ? ["BMXBMI"] : []),
           });
           const exclM6 = (excludeResult as Record<string, unknown>).model_6 as Record<string, unknown> | undefined;
           analyses.excluded = {
             strategy: "exclude_diagnosed",
-            beta: exclM6?.estimate as number ?? null,
-            p_value: exclM6?.p_value as number ?? null,
-            n: exclM6?.n as number ?? null,
+            beta: (exclM6?.estimate as number | null | undefined) ?? null,
+            p_value: (exclM6?.p_value as number | null | undefined) ?? null,
+            n: (exclM6?.n as number | null | undefined) ?? null,
             filter: exclusionFilter,
           };
         }
 
-        // Strategy: ADJUST — add disease as covariate
+        // Strategy: ADJUST — add disease indicators as covariates in the model.
         if (selectedStrategy === "adjust" || selectedStrategy === "both") {
-          // For adjust strategy, we need to pass disease variables as additional covariates
-          // We'll use the composite disease indicator
-          const adjustSubgroup = adjust_bmi ? "!is.na(BMXBMI)" : null;
-          const adjustResult = await ctx.rExec.execute("nhanes_analyze.R", {
+          const adjustResult = await ctx.rExec.execute("nhanes_sensitivity.R", {
             exposure: eVar,
             outcome: pVar,
-            cycles: cycles ? mapCyclesToSeries(cycles) : null,
-            subgroup: adjustSubgroup,
-            // Pass disease variables as additional adjustment covariates
+            cycles: seriesArg,
+            subgroup: null,
             additional_covariates: diseaseVarNames.concat(adjust_bmi ? ["BMXBMI"] : []),
           });
           const adjM6 = (adjustResult as Record<string, unknown>).model_6 as Record<string, unknown> | undefined;
           analyses.adjusted = {
             strategy: "adjust_for_disease",
-            beta: adjM6?.estimate as number ?? null,
-            p_value: adjM6?.p_value as number ?? null,
-            n: adjM6?.n as number ?? null,
+            beta: (adjM6?.estimate as number | null | undefined) ?? null,
+            p_value: (adjM6?.p_value as number | null | undefined) ?? null,
+            n: (adjM6?.n as number | null | undefined) ?? null,
             covariates_added: diseaseVarNames.concat(adjust_bmi ? ["BMXBMI"] : []),
           };
         }
@@ -6253,6 +6258,7 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
                 bmi_adjusted: adjust_bmi ?? false,
               },
               unrestricted: { beta: baseBeta, p_value: baseP, n: baseN },
+              pooling: basePooling ?? null,
               sensitivity_results: analyses,
               comparisons,
               note: "Sensitivity analysis to mitigate reverse causality in cross-sectional data. 'Exclude' removes diagnosed individuals entirely; 'adjust' adds disease status as covariates. Both approaches have trade-offs: exclusion reduces sample size and may remove individuals with highest exposures; adjustment assumes the disease-exposure relationship is linear and correctly specified. A robust association that survives both strategies is more likely to represent a forward-causal pathway.",

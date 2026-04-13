@@ -78,6 +78,10 @@ tryCatch({
     for (mv in missing_vars) {
       tab_info <- tryCatch(get_table_names_for_varname(con, mv), error = function(e) NULL)
       if (!is.null(tab_info) && nrow(tab_info) > 0) {
+        # Exclude pandemic pre-release tables (P_DEMO, P_BMX, etc.) — they use a
+        # different weight scheme (WTMECPRP) and cannot be pooled with A–J cycles.
+        tab_info <- tab_info[!grepl("^P_", tab_info$Data.File.Name), ]
+        if (nrow(tab_info) == 0) next
         for (s in cycles) {
           yr2s <- c("A"=1999,"B"=2001,"C"=2003,"D"=2005,"E"=2007,"F"=2009,"G"=2011,"H"=2013,"I"=2015,"J"=2017)
           yr <- yr2s[s]
