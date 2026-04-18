@@ -5523,6 +5523,189 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
     }
   );
 
+  // ── Tool: phenotype_correlation_matrix ──
+
+  server.tool(
+    "phenotype_correlation_matrix",
+    "Build a pairwise phenotype-phenotype correlation matrix among a set of health outcomes. Two modes: (A) pass an explicit list of phenotype variables; (B) anchor by an index phenotype — find all phenotypes with |r| > threshold to the index, then return correlations among that set. Source: pp_stats.adjusted_meta (NHANES phenotype-phenotype pairwise estimates, 75,404 pairs). Useful for understanding comorbidity structure, identifying phenotype clusters (e.g., metabolic syndrome components), and detecting correlated outcomes that may confound multi-phenotype analyses.",
+    {
+      phenotypes: z.array(z.string()).optional()
+        .describe("Mode A: explicit list of phenotype variable names (>=2)."),
+      index_phenotype: z.object({
+        phenotype: z.string(),
+        anchor_threshold: z.number().optional().default(0.25),
+        max_n: z.number().optional().default(40),
+      }).optional()
+        .describe("Mode B: anchor by an index phenotype. Finds up to max_n phenotypes with |r| > anchor_threshold to the index, then returns correlations among that set."),
+      threshold: z.number().optional().default(0.25)
+        .describe("Filter edges by |r| > threshold. Default 0.25."),
+      require_significance: z.boolean().optional().default(true)
+        .describe("Drop pairs that don't survive Bonferroni correction within the returned set."),
+      model_number: z.number().optional().default(1)
+        .describe("pp_stats model_number (1 = unadjusted, default)."),
+    },
+    async ({ phenotypes, index_phenotype, threshold, require_significance, model_number }) => {
+      const thr = threshold ?? 0.25;
+      const reqSig = require_significance ?? true;
+      const modelN = model_number ?? 1;
+
+      const modeCount = [phenotypes, index_phenotype].filter((x) => x).length;
+      if (modeCount === 0) {
+        return { content: [{ type: "text" as const, text: "Specify exactly one of: phenotypes or index_phenotype." }] };
+      }
+      if (modeCount > 1) {
+        return { content: [{ type: "text" as const, text: "Specify only one mode at a time." }] };
+      }
+
+      try {
+        let anchorVars: string[] = [];
+        let mode: "explicit" | "index_phenotype" = "explicit";
+
+        if (phenotypes) {
+          mode = "explicit";
+          for (const p of phenotypes) {
+            const r = await ctx.resolver.resolve(p);
+            if (!r.resolved) {
+              return { content: [{ type: "text" as const, text: `Phenotype "${p}" not found or ambiguous.` }] };
+            }
+            anchorVars.push(r.variable!.variableName);
+          }
+        } else if (index_phenotype) {
+          mode = "index_phenotype";
+          const r = await ctx.resolver.resolve(index_phenotype.phenotype);
+          if (!r.resolved) {
+            return { content: [{ type: "text" as const, text: `Index phenotype "${index_phenotype.phenotype}" not found or ambiguous.` }] };
+          }
+          const idxVar = r.variable!.variableName;
+          const aThr = index_phenotype.anchor_threshold ?? 0.25;
+          const maxN = index_phenotype.max_n ?? 40;
+          const corrRows = await ctx.db.query(
+            `SELECT CASE WHEN xvarname=$1 THEN yvarname ELSE xvarname END AS partner,
+                    estimate
+             FROM pp_stats.adjusted_meta
+             WHERE (xvarname=$1 OR yvarname=$1)
+               AND CAST(model_number AS INTEGER)=$2
+               AND term = 'overall'
+               AND xvarname != yvarname
+             ORDER BY ABS(estimate) DESC`,
+            idxVar, modelN
+          );
+          const seen = new Set<string>([idxVar]);
+          for (const row of corrRows as Record<string, unknown>[]) {
+            const partner = row.partner as string;
+            const est = row.estimate as number;
+            const clipped = Math.max(-1, Math.min(1, est));
+            if (Math.abs(clipped) > aThr && !seen.has(partner)) {
+              seen.add(partner);
+              if (seen.size > maxN) break;
+            }
+          }
+          anchorVars = [...seen];
+        }
+
+        if (anchorVars.length < 2) {
+          return { content: [{ type: "text" as const, text: `Need at least 2 anchor phenotypes; got ${anchorVars.length}. Try lowering anchor_threshold or increasing max_n.` }] };
+        }
+
+        const xPlaceholders = anchorVars.map((_, i) => `$${i + 2}`).join(",");
+        const yPlaceholders = anchorVars.map((_, i) => `$${i + 2 + anchorVars.length}`).join(",");
+        const sql = `
+          SELECT LEAST(xvarname, yvarname)    AS x,
+                 GREATEST(xvarname, yvarname) AS y,
+                 AVG(estimate)                AS estimate,
+                 MEDIAN("p.value")            AS p_value,
+                 MAX(nobs)                    AS n_obs
+          FROM pp_stats.adjusted_meta
+          WHERE CAST(model_number AS INTEGER) = $1
+            AND term = 'overall'
+            AND xvarname != yvarname
+            AND xvarname IN (${xPlaceholders})
+            AND yvarname IN (${yPlaceholders})
+          GROUP BY x, y
+          ORDER BY ABS(AVG(estimate)) DESC
+        `;
+        const params = [modelN, ...anchorVars, ...anchorVars];
+        const pairRows = (await ctx.db.query(sql, ...params)) as Record<string, unknown>[];
+
+        const nPairs = pairRows.length;
+        const bonfWithin = nPairs > 0 ? 0.05 / nPairs : 1;
+
+        const edges = pairRows
+          .map((row) => {
+            const est = row.estimate as number;
+            const clipped = Math.max(-1, Math.min(1, est));
+            return { row, est, clipped };
+          })
+          .filter(({ row, clipped }) => {
+            const p = row.p_value as number | null;
+            if (!Number.isFinite(clipped) || Math.abs(clipped) <= thr) return false;
+            if (reqSig && (p === null || !Number.isFinite(p) || p > bonfWithin)) return false;
+            return true;
+          })
+          .map(({ row, est, clipped }) => {
+            const x = row.x as string;
+            const y = row.y as string;
+            const xVar = ctx.resolver.get(x);
+            const yVar = ctx.resolver.get(y);
+            return {
+              x,
+              y,
+              x_description: xVar?.description ?? "Unknown",
+              y_description: yVar?.description ?? "Unknown",
+              estimate: Number(clipped.toFixed(4)),
+              estimate_raw: Number(est.toFixed(4)),
+              abs_estimate: Number(Math.abs(clipped).toFixed(4)),
+              sign: clipped > 0 ? "positive" : "negative",
+              p_value: row.p_value as number | null,
+              n_obs: row.n_obs as number | null,
+            };
+          });
+
+        const positives = edges.filter((e) => e.estimate > 0).length;
+        const meanR = edges.length === 0 ? 0 : edges.reduce((a, b) => a + b.estimate, 0) / edges.length;
+        const medianAbs = edges.length === 0 ? 0
+          : [...edges.map((e) => e.abs_estimate)].sort((a, b) => a - b)[Math.floor(edges.length / 2)];
+
+        const nodeSet = new Set<string>();
+        for (const e of edges) { nodeSet.add(e.x); nodeSet.add(e.y); }
+        const nodes = [...nodeSet].map((id) => {
+          const v = ctx.resolver.get(id);
+          return { id, description: v?.description ?? "Unknown" };
+        });
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              mode,
+              anchor_phenotypes: anchorVars,
+              n_anchor: anchorVars.length,
+              filters: {
+                edge_threshold: thr,
+                require_bonferroni_within_scan: reqSig,
+                bonferroni_threshold: reqSig ? bonfWithin : null,
+                model_number: modelN,
+              },
+              n_edges: edges.length,
+              n_nodes_in_edges: nodes.length,
+              summary: {
+                mean_r: Number(meanR.toFixed(4)),
+                median_abs_r: Number(medianAbs.toFixed(4)),
+                n_positive: positives,
+                n_negative: edges.length - positives,
+              },
+              nodes,
+              edges,
+              note: "Pairwise phenotype-phenotype associations from pp_stats.adjusted_meta. Edges are undirected (deduped via LEAST/GREATEST), sorted by |r| desc. Useful for identifying comorbidity clusters (e.g., metabolic syndrome: glucose, HbA1c, insulin, triglycerides, BMI) and correlated endpoints that may confound multi-phenotype ExWAS analyses.",
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error building phenotype correlation matrix: ${(err as Error).message}` }] };
+      }
+    }
+  );
+
   // ── Tool: exposure_compare ──
 
   server.tool(
@@ -6427,18 +6610,21 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
         }
       }
 
-      // Build R subgroup expression that EXCLUDES diagnosed individuals
-      // HUQ010: 1=Excellent, 2=Very good, 3=Good, 4=Fair, 5=Poor
-      // Disease questions: 1=Yes, 2=No → exclude when ==1
+      // Build R subgroup expression that EXCLUDES diagnosed individuals.
+      // HUQ010: 1=Excellent, 2=Very good, 3=Good, 4=Fair, 5=Poor — a single
+      // `<= 3` clause covers both "fair" and "poor"; dedup so we don't emit
+      // `(HUQ010 <= 3) & (HUQ010 <= 3)` when both poor_health sub-entries
+      // reference the same variable.
+      // Disease questions: 1=Yes, 2=No → exclude when ==1.
+      const seen = new Set<string>();
       const filterParts: string[] = [];
       for (const ev of excludeVars) {
-        if (ev.var === "HUQ010") {
-          // For poor health: exclude codes 4 and 5
-          filterParts.push(`(${ev.var} <= 3 | is.na(${ev.var}))`);
-        } else {
-          // For disease diagnosis: exclude code 1 (yes)
-          filterParts.push(`(${ev.var} != 1 | is.na(${ev.var}))`);
-        }
+        const clause = ev.var === "HUQ010"
+          ? `(${ev.var} <= 3 | is.na(${ev.var}))`
+          : `(${ev.var} != 1 | is.na(${ev.var}))`;
+        if (seen.has(clause)) continue;
+        seen.add(clause);
+        filterParts.push(clause);
       }
       const exclusionFilter = filterParts.join(" & ");
 
@@ -6453,7 +6639,14 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
       const selectedStrategy = strategy ?? "exclude";
 
       try {
-        const seriesArg = cycles ? mapCyclesToSeries(cycles) : null;
+        // When no cycle is specified, default to "H" (2013-2014). Both the
+        // R auto-pick and the "J" (2017-2018) fallback silently merge the
+        // pre-pandemic "P" pooled exposure + phenotype tables, which don't
+        // share SEQNs in nhanespewas and yield 0 merged rows — so the tool
+        // returns null betas. Cycle H doesn't hit the P pool and returns
+        // real estimates; better to pick a slightly older cycle with data
+        // than a newer cycle that silently fails.
+        const seriesArg = cycles ? mapCyclesToSeries(cycles) : ["H"];
 
         // Baseline — pooled, no subgroup, no extra adjustment.
         // Extras for BMI are passed as additional_covariates (merged cycle-by-cycle)
@@ -6514,6 +6707,21 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
           };
         }
 
+        // Drop sensitivity branches that didn't produce a beta — the R script
+        // returns null when per-cycle covariate merges don't yield overlapping
+        // rows for the chosen exposure × phenotype × disease-indicator set.
+        // Surface a warning instead of confusing nulls.
+        const warnings: string[] = [];
+        for (const [label, result] of Object.entries(analyses)) {
+          const r = result as Record<string, unknown>;
+          if (r.beta === null) {
+            warnings.push(
+              `Sensitivity branch '${label}' could not estimate — the per-cycle merge of disease indicators with ${eVar} × ${pVar} yielded no overlapping sample. Try an explicit cycle (e.g. cycles=["H"]) or a narrower exclusion list.`,
+            );
+            delete analyses[label];
+          }
+        }
+
         // Interpret results
         const comparisons: Array<Record<string, unknown>> = [];
         for (const [label, result] of Object.entries(analyses)) {
@@ -6562,6 +6770,7 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
               pooling: basePooling ?? null,
               sensitivity_results: analyses,
               comparisons,
+              warnings: warnings.length > 0 ? warnings : undefined,
               note: "Sensitivity analysis to mitigate reverse causality in cross-sectional data. 'Exclude' removes diagnosed individuals entirely; 'adjust' adds disease status as covariates. Both approaches have trade-offs: exclusion reduces sample size and may remove individuals with highest exposures; adjustment assumes the disease-exposure relationship is linear and correctly specified. A robust association that survives both strategies is more likely to represent a forward-causal pathway.",
             }, bigintReplacer, 2),
           }],
@@ -6837,7 +7046,7 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
     }
   );
 
-  console.error(`[exposomeql] Registered 52 tools (6 Class 1, 5 Class 2, 6 Class 3, 9 HHEAR, 1 Chemical, 5 CTD, 4 Cross-cutting, 5 Nutrient, 3 Diagnostics, 2 Evidence, 1 Personal, 1 Diet, 1 DietQuality, 1 Sensitivity, 2 N-of-1)`);
+  console.error(`[exposomeql] Registered 60 tools (6 Descriptive, 5 Bivariate, 6 EP-WAS, 7 Regression, 9 HHEAR, 6 Chemical/CTD, 4 Cross-cutting, 5 Nutrient, 5 Diagnostics, 2 Correlation, 2 Evidence, 1 Personal, 2 Diet, 3 Sensitivity/N-of-1, 2 Validation)`);
 }
 
 /** Find a cohort config by ID */

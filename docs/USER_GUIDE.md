@@ -886,14 +886,33 @@ Nutrient RCT evidence: See `data/nutrient_rct_search_methodology.md` for sources
 |-------|-------|-------------|
 | Descriptive Statistics | 6 | Survey-weighted means, prevalence, distributions, trends |
 | Bivariate Analysis | 5 | Conditional, crosstab, stratify, correlation, group comparison |
-| EP-WAS Search | 6 | Query 66.8M pre-computed associations |
+| EP-WAS Search | 6 | Query 66.8M pre-computed associations (with Bonferroni + BH-FDR) |
 | Regression & Modeling | 7 | Flexible regression, dose-response, mediation, interaction |
 | HHEAR Cohorts | 9 | 35+ cohort analytics, cross-cohort comparison |
 | Chemical & CTD | 6 | Chemical identity, gene interactions, pathways, triangulation |
 | Cross-Cutting | 4 | Reverse triangulation, exposure profiles |
 | Nutrient Triangulation | 5 | RCT vs observational concordance, biomarker vs dietary |
-| Meta-Analytic Diagnostics | 3 | Simpson's paradox, secular trends, exposure comparison |
-| **Total** | **44** | unique tool registrations |
+| Meta-Analytic Diagnostics | 5 | Simpson's paradox, secular trends, exposure comparison, confounder check |
+| Correlation Structure | 2 | Exposure-exposure (420K pairs) and phenotype-phenotype (75K pairs) pairwise matrices |
+| Evidence & Guidelines | 2 | Guideline comparison, secular trend |
+| Personal Exposure | 1 | Individual exposome profiling |
+| Diet Assessment | 2 | DRI comparison, HEI diet quality scoring |
+| Sensitivity & N-of-1 | 3 | Reverse-causation sensitivity, measurement uncertainty, doppelganger matching |
+| Validation | 2 | ExWAS validation, NHANES variable validation |
+| **Total** | **60** | unique tool registrations |
+
+### Correlation Structure Tools
+
+**`exposure_correlation_matrix`** — Pairwise exposure-exposure correlation matrix from 420K pre-computed EE associations. Three input modes:
+- **Mode A**: explicit list of exposure variables
+- **Mode B**: anchor by a phenotype → auto-pick top-N exposures associated with it, then show correlations among them
+- **Mode C**: anchor by an index exposure → find all exposures with |r| > threshold, then show correlations among that set
+
+**`phenotype_correlation_matrix`** — Pairwise phenotype-phenotype correlation matrix from 75K pre-computed PP associations. Two input modes:
+- **Mode A**: explicit list of phenotype variables
+- **Mode B**: anchor by an index phenotype → find all phenotypes with |r| > threshold
+
+Example: "Which phenotypes cluster with serum uric acid?" reveals metabolic syndrome structure (glucose, HbA1c, triglycerides, BMI, CRP co-correlate). Useful for identifying comorbidity patterns and correlated endpoints that may confound multi-phenotype ExWAS.
 
 ---
 

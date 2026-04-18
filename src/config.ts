@@ -10,6 +10,8 @@ export interface ExposomeQLConfig {
   peStatsDbPath: string;
   /** Path to the EE summary stats SQLite database */
   eeStatsDbPath: string;
+  /** Path to the PP (phenotype-phenotype) summary stats SQLite database */
+  ppStatsDbPath: string;
   /** Path to the directory for converted Parquet files */
   parquetDir: string;
   /** Path to the Rscript executable */
@@ -70,8 +72,12 @@ function findHhearDataDir(): string {
 
   const candidates = [
     path.resolve(process.cwd(), "hhear-data"),
+    // Legacy macOS Dropbox symlink paths
     path.resolve(process.env.HOME ?? "", "HMS Dropbox/Chirag Patel/HHEAR Targeted Datasets 2026"),
     path.resolve(process.env.HOME ?? "", "Dropbox (HMS)/HHEAR Targeted Datasets 2026"),
+    // Modern macOS Dropbox cloud-storage mount (Library/CloudStorage/Dropbox-*)
+    path.resolve(process.env.HOME ?? "", "Library/CloudStorage/Dropbox-HMS/Chirag Patel/HHEAR Targeted Datasets 2026"),
+    path.resolve(process.env.HOME ?? "", "Library/CloudStorage/Dropbox/Chirag Patel/HHEAR Targeted Datasets 2026"),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
@@ -87,6 +93,7 @@ export function loadConfig(): ExposomeQLConfig {
     nhanesDbPath: path.join(dataDir, "nhanes_031725.sqlite"),
     peStatsDbPath: path.join(dataDir, "pe_summary_stats_01_2025.sqlite"),
     eeStatsDbPath: path.join(dataDir, "ee_summary_stats_03_2024.sqlite"),
+    ppStatsDbPath: path.join(dataDir, "pp_summary_stats_03_2024.sqlite"),
     parquetDir: path.join(dataDir, "parquet"),
     rscriptPath: findRscript(),
     nhanespewasPath: findNhanespewasPath(),
