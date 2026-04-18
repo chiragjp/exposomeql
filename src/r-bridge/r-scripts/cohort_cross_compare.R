@@ -7,7 +7,7 @@ suppressPackageStartupMessages({
   library(dplyr)
 })
 
-params <- fromJSON(file("stdin"))
+params <- if (exists("POOL_PARAMS", envir = globalenv())) get("POOL_PARAMS", envir = globalenv()) else fromJSON(file("stdin"))
 
 # params$cohorts is a data.frame with columns: id, targeted_csv, epi_csv
 # (fromJSON converts array of objects to data.frame by default)

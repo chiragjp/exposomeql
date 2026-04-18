@@ -3,9 +3,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import type { ExposomeQLConfig } from "../config.js";
 import type { RResult } from "../types.js";
+import { RPool } from "./r-pool.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R_SCRIPTS_DIR = path.join(__dirname, "..", "..", "src", "r-bridge", "r-scripts");
+const POOL_WORKER_PATH = path.join(R_SCRIPTS_DIR, "_pool_worker.R");
 
 /** Maximum buffer size (50 MB) to prevent memory exhaustion from runaway R processes */
 const MAX_BUFFER_SIZE = 50 * 1024 * 1024;
@@ -13,17 +15,44 @@ const MAX_BUFFER_SIZE = 50 * 1024 * 1024;
 /** Time to wait after SIGTERM before escalating to SIGKILL (ms) */
 const SIGKILL_DELAY = 5_000;
 
+function poolEnabled(): boolean {
+  // Default ON: every R script has been migrated from on.exit(disconnect…) to
+  // tryCatch(finally = …) for pool compatibility. Opt out with EXPOSOMEQL_R_POOL=0.
+  return process.env.EXPOSOMEQL_R_POOL !== "0";
+}
+
+function poolSize(): number {
+  const n = Number(process.env.EXPOSOMEQL_R_POOL_SIZE ?? "2");
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 2;
+}
+
 export class RExecutor {
   private rscriptPath: string;
   private nhanesDbPath: string;
   private nhanespewasPath: string;
   private timeoutMs: number;
+  private pool: RPool | null = null;
 
   constructor(config: ExposomeQLConfig, timeoutMs = 60_000) {
     this.rscriptPath = config.rscriptPath;
     this.nhanesDbPath = config.nhanesDbPath;
     this.nhanespewasPath = config.nhanespewasPath;
     this.timeoutMs = timeoutMs;
+
+    if (poolEnabled()) {
+      const size = poolSize();
+      console.error(`[r-executor] starting R worker pool (size=${size})`);
+      this.pool = new RPool({
+        rscriptPath: this.rscriptPath,
+        workerScriptPath: POOL_WORKER_PATH,
+        size,
+        baseEnv: {
+          EXPOSOMEQL_DB_PATH: this.nhanesDbPath,
+          NHANESPEWAS_PATH: this.nhanespewasPath,
+        },
+        defaultTimeoutMs: this.timeoutMs,
+      });
+    }
   }
 
   /**
@@ -60,6 +89,25 @@ export class RExecutor {
     timeoutMs?: number
   ): Promise<RResult> {
     const scriptPath = path.join(R_SCRIPTS_DIR, scriptName);
+    if (this.pool) {
+      try {
+        const stdout = await this.pool.call(scriptPath, params, {}, timeoutMs);
+        return parseRJsonOutput(stdout, scriptName);
+      } catch (err) {
+        // Pool failure (worker crash, timeout, bad JSON) — fall through to per-call spawn
+        // so a flaky worker doesn't take a single tool call down with it.
+        console.error(`[r-executor] pool call ${scriptName} failed, falling back to subprocess: ${(err as Error).message}`);
+      }
+    }
+    return this.executeOneShot(scriptName, scriptPath, params, timeoutMs);
+  }
+
+  private executeOneShot(
+    scriptName: string,
+    scriptPath: string,
+    params: Record<string, unknown>,
+    timeoutMs?: number,
+  ): Promise<RResult> {
     const timeout = timeoutMs ?? this.timeoutMs;
 
     return new Promise((resolve, reject) => {
@@ -105,7 +153,6 @@ export class RExecutor {
 
       const timer = setTimeout(() => {
         child.kill("SIGTERM");
-        // Escalate to SIGKILL if process doesn't exit after SIGTERM
         const killTimer = setTimeout(() => {
           child.kill("SIGKILL");
         }, SIGKILL_DELAY);
@@ -122,8 +169,6 @@ export class RExecutor {
         }
 
         if (code !== 0) {
-          // R scripts emit controlled errors as JSON on stdout before quit(status=1).
-          // Surface that message if present; otherwise fall back to stderr.
           let scriptError: string | null = null;
           const jStart = stdout.indexOf("{");
           const jEnd = stdout.lastIndexOf("}");
@@ -147,33 +192,12 @@ export class RExecutor {
         }
 
         try {
-          // Find the JSON output — R scripts write JSON to stdout
-          // There may be R startup messages before it
-          const jsonStart = stdout.indexOf("{");
-          const jsonEnd = stdout.lastIndexOf("}");
-          if (jsonStart === -1 || jsonEnd === -1) {
-            // Try array
-            const arrStart = stdout.indexOf("[");
-            const arrEnd = stdout.lastIndexOf("]");
-            if (arrStart === -1 || arrEnd === -1) {
-              settle(
-                reject,
-                new Error(
-                  `No JSON in R output.\nstdout: ${stdout}\nstderr: ${stderr}`
-                )
-              );
-              return;
-            }
-            settle(resolve, JSON.parse(stdout.slice(arrStart, arrEnd + 1)) as RResult);
-            return;
-          }
-          settle(resolve, JSON.parse(stdout.slice(jsonStart, jsonEnd + 1)) as RResult);
+          const parsed = parseRJsonOutput(stdout, scriptName);
+          settle(resolve, parsed);
         } catch (e) {
           settle(
             reject,
-            new Error(
-              `Failed to parse R JSON output: ${(e as Error).message}\nstdout: ${stdout}\nstderr: ${stderr}`
-            )
+            new Error(`Failed to parse R JSON output: ${(e as Error).message}\nstdout: ${stdout}\nstderr: ${stderr}`)
           );
         }
       });
@@ -183,9 +207,23 @@ export class RExecutor {
         settle(reject, new Error(`Failed to spawn Rscript: ${err.message}`));
       });
 
-      // Send params as JSON on stdin
       child.stdin.write(JSON.stringify(params));
       child.stdin.end();
     });
   }
+}
+
+/** Extract the script's JSON payload from raw stdout (R may emit startup noise first). */
+function parseRJsonOutput(stdout: string, scriptName: string): RResult {
+  const jsonStart = stdout.indexOf("{");
+  const jsonEnd = stdout.lastIndexOf("}");
+  if (jsonStart !== -1 && jsonEnd > jsonStart) {
+    return JSON.parse(stdout.slice(jsonStart, jsonEnd + 1)) as RResult;
+  }
+  const arrStart = stdout.indexOf("[");
+  const arrEnd = stdout.lastIndexOf("]");
+  if (arrStart !== -1 && arrEnd > arrStart) {
+    return JSON.parse(stdout.slice(arrStart, arrEnd + 1)) as RResult;
+  }
+  throw new Error(`No JSON in R output from ${scriptName}.\nstdout: ${stdout}`);
 }

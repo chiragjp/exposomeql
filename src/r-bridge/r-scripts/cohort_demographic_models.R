@@ -9,7 +9,7 @@ suppressPackageStartupMessages({
   library(dplyr)
 })
 
-params <- fromJSON(file("stdin"))
+params <- if (exists("POOL_PARAMS", envir = globalenv())) get("POOL_PARAMS", envir = globalenv()) else fromJSON(file("stdin"))
 
 targeted_csv <- params$targeted_csv
 epi_csv <- params$epi_csv

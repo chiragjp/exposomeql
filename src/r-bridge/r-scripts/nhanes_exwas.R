@@ -17,13 +17,15 @@ suppressPackageStartupMessages({
 })
 
 nhanespewas_path <- Sys.getenv("NHANESPEWAS_PATH")
-if (nzchar(nhanespewas_path) && file.exists(file.path(nhanespewas_path, "DESCRIPTION"))) {
-  suppressPackageStartupMessages(devtools::load_all(nhanespewas_path, quiet = TRUE))
-} else {
-  suppressPackageStartupMessages(library(nhanespewas))
+if (!isNamespaceLoaded("nhanespewas")) {
+  if (nzchar(nhanespewas_path) && file.exists(file.path(nhanespewas_path, "DESCRIPTION")) && requireNamespace("devtools", quietly = TRUE)) {
+    suppressPackageStartupMessages(devtools::load_all(nhanespewas_path, quiet = TRUE))
+  } else {
+    suppressPackageStartupMessages(library(nhanespewas))
+  }
 }
 
-params <- fromJSON(file("stdin"))
+params <- if (exists("POOL_PARAMS", envir = globalenv())) get("POOL_PARAMS", envir = globalenv()) else fromJSON(file("stdin"))
 db_path <- Sys.getenv("EXPOSOMEQL_DB_PATH")
 
 outcome <- params$outcome
@@ -31,7 +33,7 @@ exposures <- params$exposures   # character vector of exposure variable names (f
 cycles <- params$cycles
 
 con <- connect_pewas_data(db_path)
-on.exit(disconnect_pewas_data(con), add = TRUE)
+# on.exit removed for pool compatibility; cleanup handled in tryCatch finally
 
 if (is.null(cycles)) {
   tab_info <- get_table_names_for_varname(con, outcome)
@@ -140,4 +142,6 @@ tryCatch({
 }, error = function(e) {
   cat(toJSON(list(error = conditionMessage(e)), auto_unbox = TRUE))
   quit(status = 1)
+}, finally = {
+  try(disconnect_pewas_data(con), silent = TRUE)
 })

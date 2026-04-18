@@ -10,13 +10,13 @@ suppressPackageStartupMessages({
 })
 
 # Read input from stdin
-input <- fromJSON(readLines(con = "stdin", warn = FALSE))
+input <- if (exists("POOL_PARAMS", envir = globalenv())) get("POOL_PARAMS", envir = globalenv()) else fromJSON(readLines(con = "stdin", warn = FALSE))
 
 db_path <- Sys.getenv("EXPOSOMEQL_DB_PATH",
   unset = file.path(Sys.getenv("EXPOSOMEQL_DATA_DIR", unset = "data"), "nhanes_031725.sqlite"))
 
 con <- dbConnect(SQLite(), db_path)
-on.exit(dbDisconnect(con))
+# on.exit replaced with explicit cleanup at end for pool compatibility
 
 # Get the most recent cycle's demo data
 demo <- dbGetQuery(con, "SELECT SEQN, RIDAGEYR, RIAGENDR, RIDRETH3, BMXBMI, WTMEC2YR, SDMVPSU, SDMVSTRA FROM DEMO_J LEFT JOIN BMX_J USING(SEQN)")
@@ -112,3 +112,4 @@ result <- list(
 )
 
 cat(toJSON(result, auto_unbox = TRUE))
+try(dbDisconnect(con), silent = TRUE)

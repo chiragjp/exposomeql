@@ -10,7 +10,7 @@ suppressPackageStartupMessages({
 })
 
 # Read JSON input from stdin
-input <- fromJSON(file("stdin"))
+input <- if (exists("POOL_PARAMS", envir = globalenv())) get("POOL_PARAMS", envir = globalenv()) else fromJSON(file("stdin"))
 
 targeted_csv <- input$targeted_csv
 epi_csv      <- input$epi_csv
