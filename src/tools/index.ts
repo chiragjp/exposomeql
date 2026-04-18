@@ -212,6 +212,42 @@ const BIOLOGICAL_CONTEXT_GENES: Record<string, string[]> = (() => {
   return ctx;
 })();
 
+/** Human-readable labels for common NHANES coded variables. Used to decorate
+ *  stratum values (e.g. `1` → "Male") in chart-ready output. Unknown codes
+ *  fall back to "{variable}={code}". */
+const STRATUM_LABELS: Record<string, Record<string, string>> = {
+  RIAGENDR: { "1": "Male", "2": "Female" },
+  RIDRETH1: {
+    "1": "Mexican American",
+    "2": "Other Hispanic",
+    "3": "Non-Hispanic White",
+    "4": "Non-Hispanic Black",
+    "5": "Other race",
+  },
+  RIDRETH3: {
+    "1": "Mexican American",
+    "2": "Other Hispanic",
+    "3": "Non-Hispanic White",
+    "4": "Non-Hispanic Black",
+    "6": "Non-Hispanic Asian",
+    "7": "Other race",
+  },
+  DMDEDUC2: {
+    "1": "<9th grade",
+    "2": "9–11th",
+    "3": "HS / GED",
+    "4": "Some college",
+    "5": "College+",
+  },
+};
+
+function labelForStratum(column: string, value: unknown): string {
+  const v = value == null ? "" : String(value);
+  const table = STRATUM_LABELS[column];
+  if (table && table[v]) return table[v];
+  return column ? `${column}=${v}` : v;
+}
+
 /** Map user-facing cycle strings to series letters. Throws on invalid cycles. */
 function mapCyclesToSeries(cycles?: string[]): string[] | undefined {
   if (!cycles || cycles.length === 0) return undefined;
@@ -392,13 +428,15 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
 
   server.tool(
     "nhanes_distribution",
-    "Compute survey-weighted distribution: percentiles (5th, 25th, 50th, 75th, 95th), geometric mean for biomarkers, and histogram-ready bin data.",
+    "Compute survey-weighted distribution: percentiles (5th, 25th, 50th, 75th, 95th), geometric mean for biomarkers, and histogram-ready bin data. Pass `stratify_by` (NHANES variable name like RIAGENDR, RIDRETH1, or a binned age column) to also get a per-stratum histogram array — the web UI renders this as a ridgeline-style faceted chart.",
     {
       variable: z.string().describe("NHANES variable name or description"),
       subgroup: z.string().optional().describe("Subgroup filter"),
       cycles: z.array(z.string()).optional().describe("Survey cycles to include"),
+      stratify_by: z.string().optional()
+        .describe("Optional NHANES column to stratify the histogram by (e.g. 'RIAGENDR' for sex, 'RIDRETH1' for ethnicity). Per-stratum histograms share bin edges with the overall histogram for direct visual comparison."),
     },
-    async ({ variable, subgroup, cycles }) => {
+    async ({ variable, subgroup, cycles, stratify_by }) => {
       const resolved = await ctx.resolver.resolve(variable);
       if (!resolved.resolved) {
         return {
@@ -418,7 +456,21 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
           variable: resolved.variable!.variableName,
           subgroup: subgroup ?? null,
           cycles: series,
+          stratify_by: stratify_by ?? null,
         });
+
+        // Enrich strata with human labels when the stratifier is a well-known
+        // NHANES coded variable (sex, ethnicity). The raw R output carries
+        // numeric codes; the web UI renders whatever `stratum_label` we give it.
+        if (rResult && typeof rResult === "object") {
+          const r = rResult as Record<string, unknown>;
+          const strata = Array.isArray(r.strata) ? (r.strata as Record<string, unknown>[]) : [];
+          for (const s of strata) {
+            const value = s.stratum_value;
+            s.stratum_label = labelForStratum(stratify_by ?? "", value);
+          }
+        }
+
         return {
           content: [
             {

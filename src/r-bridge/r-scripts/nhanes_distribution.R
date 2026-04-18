@@ -25,6 +25,7 @@ db_path <- Sys.getenv("EXPOSOMEQL_DB_PATH")
 variable <- params$variable
 cycles <- params$cycles
 subgroup <- params$subgroup
+stratify_by <- params$stratify_by  # optional column to stratify the histogram
 
 con <- connect_pewas_data(db_path)
 # on.exit removed for pool compatibility; cleanup handled in tryCatch finally
@@ -125,6 +126,38 @@ tryCatch({
     hist_data <- hist(vals, breaks = breaks_hist, plot = FALSE)
   }
 
+  # Per-stratum histograms (shared breaks for visual comparability).
+  # When stratify_by is provided and references a column we have, compute
+  # per-stratum count histograms using the SAME bin edges as the overall
+  # histogram. Each stratum also reports unweighted n + mean for context.
+  strata_out <- NULL
+  if (!is.null(stratify_by) && nzchar(stratify_by) && stratify_by %in% names(dat)) {
+    shared_breaks <- if (is.null(hist_data$breaks) || length(hist_data$breaks) < 2) {
+      seq(val_min, val_max, length.out = 21)
+    } else {
+      hist_data$breaks
+    }
+    strata_vals <- sort(unique(dat[[stratify_by]]))
+    strata_vals <- strata_vals[!is.na(strata_vals)]
+    strata_out <- list()
+    for (sv in strata_vals) {
+      sub <- dat[dat[[stratify_by]] == sv & !is.na(dat[[variable]]), ]
+      if (nrow(sub) < 30) next  # NCHS cell-size guardrail
+      sub_hist <- hist(sub[[variable]], breaks = shared_breaks, plot = FALSE)
+      strata_out[[length(strata_out) + 1]] <- list(
+        stratum_value = sv,
+        n = nrow(sub),
+        mean = round(mean(sub[[variable]], na.rm = TRUE), 6),
+        histogram = list(
+          breaks = round(sub_hist$breaks, 4),
+          counts = sub_hist$counts,
+          mids = round(sub_hist$mids, 4)
+        )
+      )
+    }
+    if (length(strata_out) == 0) strata_out <- NULL
+  }
+
   output <- list(
     variable = variable,
     mean = round(as.numeric(coef(mean_result)), 6),
@@ -138,6 +171,8 @@ tryCatch({
       counts = hist_data$counts,
       mids = round(hist_data$mids, 4)
     ),
+    stratify_by = if (!is.null(strata_out)) stratify_by else NULL,
+    strata = strata_out,
     n_unweighted = nrow(dat),
     cycles_used = cycles
   )
