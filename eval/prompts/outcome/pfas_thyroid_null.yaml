@@ -1,0 +1,18 @@
+id: outcome_pfas_thyroid_null
+category: outcome
+prompt: |
+  ATSDR lists thyroid effects as a documented health concern for PFAS. Does NHANES support this
+  in the general adult population? Be specific about TSH, T4, and T3.
+expected:
+  direction_in_data: null_across_thyroid_panel
+deterministic_checks:
+  required_terms:
+    - "(PFAS|PFOA|PFOS)"
+    - "(TSH|T4|T3|thyroid)"
+    - "(null|not significant|no signal|no association)"
+  forbidden_terms:
+    - "NHANES confirms.*thyroid"
+rubric:
+  - reports_null_in_population
+  - distinguishes_population_from_subgroup
+  - critiques_evidence_strength_appropriately

@@ -1,0 +1,13 @@
+{
+  "prompt_id": "process_correlation_index_pfoa",
+  "category": "process_correlation_structure",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "Short answer: The strongest correlates of PFOA (LBXPFOA) in NHANES are other PFAS measured in serum. Cross-chemical correlations outside the PFAS family are generally weak.\n\nWhat tends to sit at the top\n- PFOS (LBXPFOS): Spearman r typically ~0.6–0.8\n- PFHxS (PFHxS; often LBXPFHS): ~0.5–0.7\n- PFNA (LBXPFNA): ~0.5–0.7\n- PFDA/DeA (perfluorodecanoic acid; code varies by cycle, e.g., LBXPFDE or LBXPFDA): ~0.4–0.6\n- PFUnDA (LBXPFUN in some cycles): ~0.3–0.5\n- MeFOSAA / EtFOSAA precursors (available in earlier cycles): ~0.4–0.7 when detection is good\n\nWhat does not correlate much\n- Urinary short–half-life chemicals (phthalate metabolites, phenols including BPA, PAH metabolites, organophosphate pesticide metabolites, many VOC metabolites): near zero correlations with serum PFOA in cross-sectional NHANES.\n- Tobacco biomarkers (serum cotinine, urinary NNAL): near zero.\n- Other persistent organics (PCBs, PBDEs) and metals: at most modest, often r ≤ 0.2–0.3; blood mercury sometimes shows small positive correlations that can reflect shared dietary sources (e.g., seafood), but these are not among the top correlates.\n\nCycle notes\n- Exact ranks and magnitudes vary by NHANES cycle because of changing use patterns (e.g., PFOS/PFOA phase-outs), detection limits, and which PFAS were measured. Still, the top correlates of PFOA remain other PFAS in every cycle where the broader PFAS panel was assayed.\n\nBottom line\n- Yes—the correlation structure for LBXPFOA is dominated by other PFAS compounds, consistent with shared sources, similar pharmacokinetics, and the same measurement matrix (serum). Non-PFAS environmental exposures rarely crack the top ranks and, when they do, correlations are modest. If you want a cycle-specific ranked list and coefficients, I can generate one for the cycles you care about.",
+  "tool_trace": [],
+  "stop_reason": "stop",
+  "input_tokens": 65,
+  "output_tokens": 3254,
+  "latency_ms": 39754,
+  "iterations": 1
+}

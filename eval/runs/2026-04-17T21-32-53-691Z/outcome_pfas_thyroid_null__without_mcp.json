@@ -1,0 +1,13 @@
+{
+  "prompt_id": "outcome_pfas_thyroid_null",
+  "category": "outcome",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "length",
+  "input_tokens": 47,
+  "output_tokens": 4096,
+  "latency_ms": 48554,
+  "iterations": 1
+}

@@ -1,0 +1,22 @@
+id: quant_pfoa_uric_beta
+category: quantitative
+prompt: |
+  Report the pooled meta-analytic β coefficient for PFOA (LBXPFOA) → serum
+  uric acid (LBXSUA) from the NHANES EP-WAS (model 6, age + age² + sex +
+  ethnicity). Give β to 2 or 3 decimal places. No hedging.
+expected:
+  answer: 0.111
+  tolerance: 0.03
+deterministic_checks:
+  required_terms:
+    # Numeric β in the expected ballpark + at least one of the two variable
+    # names. A terse numeric answer that restates PFOA is still a pass —
+    # the prompt already named both variables.
+    - "(0\\.1[01]\\d|β\\s*=\\s*0\\.1[01])"
+    - "(PFOA|LBXPFOA|uric acid|LBXSUA)"
+  forbidden_terms:
+    - "(approximately|roughly|cannot (find|determine|provide)|I don'?t have|I couldn'?t)"
+rubric:
+  - reports_numeric_beta_near_0_111
+  - does_not_fabricate
+  - does_not_hedge

@@ -1,0 +1,13 @@
+{
+  "prompt_id": "quant_pfoa_uric_beta",
+  "category": "quantitative",
+  "arm": "without_mcp",
+  "model": "gemini-2.5-pro",
+  "final_text": "The pooled meta-analytic β coefficient is 0.052.",
+  "tool_trace": [],
+  "stop_reason": "STOP",
+  "input_tokens": 68,
+  "output_tokens": 15,
+  "latency_ms": 14445,
+  "iterations": 1
+}

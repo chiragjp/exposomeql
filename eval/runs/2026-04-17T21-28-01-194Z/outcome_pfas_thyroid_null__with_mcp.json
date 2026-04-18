@@ -1,0 +1,14 @@
+{
+  "prompt_id": "outcome_pfas_thyroid_null",
+  "category": "outcome",
+  "arm": "with_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 126,
+  "iterations": 1,
+  "error": "401 Incorrect API key provided: sk-ant-a************************************************************************************************DgAA. You can find your API key at https://platform.openai.com/account/api-keys."
+}

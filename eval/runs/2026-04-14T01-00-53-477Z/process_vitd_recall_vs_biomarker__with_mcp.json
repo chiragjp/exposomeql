@@ -1,0 +1,14 @@
+{
+  "prompt_id": "process_vitd_recall_vs_biomarker",
+  "category": "process_confounding",
+  "arm": "with_mcp",
+  "model": "claude-haiku-4-5-20251001",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 1750,
+  "iterations": 1,
+  "error": "429 {\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"This request would exceed your organization's rate limit of 50,000 input tokens per minute (org: c33984f1-a076-44f6-907c-1378fcf46685, model: claude-haiku-4-5-20251001). For details, refer to: https://docs.claude.com/en/api/rate-limits. You can see the response headers for current usage. Please reduce the prompt length or the maximum tokens requested, or try again later. You may also contact sales at https://claude.com/contact-sales to discuss your options for a rate limit increase.\"},\"request_id\":\"req_011Ca2nZDkryZ9pfNUqAzJdW\"}"
+}

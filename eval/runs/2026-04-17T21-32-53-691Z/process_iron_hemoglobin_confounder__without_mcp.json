@@ -1,0 +1,13 @@
+{
+  "prompt_id": "process_iron_hemoglobin_confounder",
+  "category": "process_confounding",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "Short answer: The trial result is causal; the NHANES result is mostly confounding and biology.\n\nWhy they differ\n- Reverse causation/confounding by indication: People with low hemoglobin are told to “eat more iron” (and sicker patients/CKD/blood donors/pregnant or heavy‑menstruating women often try to increase dietary iron). In a cross‑section, that makes higher reported iron intake cluster with lower hemoglobin.\n- Inflammation/hepcidin: Obesity, infection, chronic disease raise hepcidin, which blocks iron absorption and lowers hemoglobin (anemia of inflammation). Those same conditions correlate with higher energy intake and higher iron intake (fortified foods), yielding an inverse intake–Hb association even though absorbed iron is low.\n- Bioavailability matters: RCTs use highly bioavailable supplemental iron in deficient people, often away from inhibitors. NHANES “dietary iron” is mostly non‑heme and often consumed with inhibitors (phytate, polyphenols, calcium), so intake ≠ absorbed iron.\n- Timing and measurement error: NHANES uses 24‑h recalls (or a few days) to predict a biomarker that reflects weeks–months of absorbed iron. Short‑term intake misclassification plus behavior changes after anemia diagnosis can flip or obscure the true direction.\n- Heterogeneity and residual confounding: Menstruation, pregnancy (hemodilution), occult blood loss, CKD/EPO deficiency, socioeconomic factors, and energy adjustment choices can induce an apparent negative association. Adjusting for intermediates (e.g., ferritin) can also introduce collider bias.\n\nHow to see this in NHANES\n- Exclude pregnant women, recent blood donors, CKD, high CRP; stratify by CRP/BMI.\n- Separate heme from non‑heme iron; separate supplements from diet.\n- Adjust for (or stratify by) menstruation/menstrual blood loss proxies and GI bleed risk.\n- Use usual intake estimates (multiple recalls/NCI method) and avoid adjusting for intermediates.\n\nBottom line: There’s no contradiction. Iron given in adequate, absorbable doses to iron‑deficient people raises hemoglobin (RCTs). In a general, cross‑sectional survey, higher reported dietary iron often tags people who are anemic or inflamed and absorbing poorly, producing an inverse association that is non‑causal.",
+  "tool_trace": [],
+  "stop_reason": "stop",
+  "input_tokens": 52,
+  "output_tokens": 2420,
+  "latency_ms": 43461,
+  "iterations": 1
+}

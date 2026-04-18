@@ -1,0 +1,38 @@
+{
+  "prompt_id": "outcome_lead_hemoglobin_paradox",
+  "category": "outcome",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 118,
+  "iterations": 1,
+  "error": "400 Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(lead|LBXBPB)",
+        "matched": false
+      },
+      {
+        "term": "(hemoglobin|LBXHGB)",
+        "matched": false
+      },
+      {
+        "term": "(reverse|healthy|selection|confound)",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "lead causes higher hemoglobin",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [],
+    "pass": false
+  }
+}

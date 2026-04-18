@@ -1,0 +1,13 @@
+{
+  "prompt_id": "quant_pfoa_cycles_count",
+  "category": "quantitative",
+  "arm": "without_mcp",
+  "model": "gemini-2.5-pro",
+  "final_text": "10",
+  "tool_trace": [],
+  "stop_reason": "STOP",
+  "input_tokens": 31,
+  "output_tokens": 2,
+  "latency_ms": 21614,
+  "iterations": 1
+}

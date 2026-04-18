@@ -1,0 +1,45 @@
+{
+  "prompt_id": "quant_bonferroni_threshold",
+  "category": "quantitative",
+  "arm": "with_mcp",
+  "model": "claude-opus-4-6",
+  "final_text": "The catalog metadata provides the answer directly:\n\n## EP-WAS Catalog-Wide Bonferroni Threshold (Model 6)\n\n| Parameter | Value |\n|---|---|\n| **Total tests** | **165,342** unique exposure–phenotype pairs |\n| **Bonferroni threshold** | **3.02 × 10⁻⁷** |\n| **Calculation** | 0.05 ÷ 165,342 = 3.02 × 10⁻⁷ |\n\n**Model 6** adjusts for **age + age² + sex + race/ethnicity**. Each \"test\" is a UWLS (uncertainty-weighted least squares) meta-analysis of a single exposure→phenotype pair pooled across available NHANES cycles, with the exposure log₁₀-transformed and z-scored.\n\nSo any association with a nominal p-value below **3.02 × 10⁻⁷** survives the catalog-wide Bonferroni correction for all 165,342 tests.",
+  "tool_trace": [
+    {
+      "name": "epwas_search",
+      "input": {
+        "exposure": "lead",
+        "model_number": 6,
+        "p_threshold": 1,
+        "top_n": 1
+      },
+      "output": "{\n  \"query\": {\n    \"exposure\": \"LBXBPB\",\n    \"phenotype\": null\n  },\n  \"model\": \"age + age² + sex + ethnicity\",\n  \"multiple_testing\": {\n    \"total_tests\": 165342,\n    \"bonferroni_threshold\": 3.02e-7,\n    \"note\": \"P-values are nominal. Bonferroni threshold for the full EP-WAS catalog is 3.02e-07 (0.05 / 165,342 tests on model 6). For a hypothesis-driven single test you may use nominal p<0.05; for screening across many exposures/phenotypes apply Bonferroni or BH-FDR.\"\n  },\n  \"n_results\": 1,\n  \"n_survives_bonferroni\": 0,\n  \"results\": [\n    {\n      \"exposure\": \"LBXBPB\",\n      \"phenotype\": \"LBXFSH\",\n      \"estimate\": 0.24022406305578634,\n      \"std_error\": 0.023611928052809983,\n      \"p_value\": 0.06237381225122532,\n      \"p_value_stouffer\": 2.3423393107705126e-10,\n      \"i_squared\": 0,\n      \"h_squared\": 0.7689253267858462,\n      \"n_studies\": 2,\n      \"model_number\": 6,\n      \"exposure_description\": \"Blood lead (ug/dL)\",\n      \"phenotype_description\": \"Follicle stimulating hormone (mIU/mL)\",\n      \"survives_bonferroni\": false\n    }\n  ],\n  \"note\": \"Effect sizes are from survey-weighted linear regression with exposure log10-transformed and z-scored. P-values are nominal; see multiple_testing for the Bonferroni threshold and survives_bonferroni per row.\"\n}",
+      "ms": 219
+    }
+  ],
+  "stop_reason": "end_turn",
+  "input_tokens": 33158,
+  "output_tokens": 424,
+  "latency_ms": 11980,
+  "iterations": 2,
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(3\\.0[012]e-?0?7|3\\.0[012]\\s*[x×]\\s*10\\s*[⁻^-]\\s*[⁷7]|0\\.05\\s*[/÷]\\s*165[,]?342)",
+        "matched": true
+      },
+      {
+        "term": "165[,]?342",
+        "matched": true
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "(approximately|roughly|on the order of|I don'?t have access)",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [],
+    "pass": true
+  }
+}

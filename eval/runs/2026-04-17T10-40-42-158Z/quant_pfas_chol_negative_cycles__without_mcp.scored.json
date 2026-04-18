@@ -1,0 +1,42 @@
+{
+  "prompt_id": "quant_pfas_chol_negative_cycles",
+  "category": "quantitative",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 115,
+  "iterations": 1,
+  "error": "400 Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(\\b[CDEF]\\b|200[3-9]-20[01][02]|2003-2004|2005-2006|2007-2008|2009-2010)",
+        "matched": false
+      },
+      {
+        "term": "(negative|inverse|below zero|<\\s*0)",
+        "matched": false
+      },
+      {
+        "term": "(PFOA|LBXPFOA)",
+        "matched": false
+      },
+      {
+        "term": "(cholesterol|LBXTC)",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "(approximately|I don'?t have|cannot determine)",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [],
+    "pass": false
+  }
+}

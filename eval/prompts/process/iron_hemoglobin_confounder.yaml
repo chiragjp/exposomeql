@@ -1,0 +1,21 @@
+id: process_iron_hemoglobin_confounder
+category: process_confounding
+prompt: |
+  RCTs of iron supplementation consistently raise hemoglobin by 0.9-2.0 g/dL. Yet in NHANES,
+  dietary iron intake is *negatively* associated with hemoglobin. Reconcile this.
+expected:
+  resolution: confounding_by_baseline_anemia_status
+  population_difference: rct_treated_anemic_vs_general_nhanes
+required_tools:
+  - "(nutrient_triangulate|nutrient_biomarker_vs_dietary)"
+deterministic_checks:
+  required_terms:
+    - "(iron|DR1TIRON|LBXIRN)"
+    - "(hemoglobin|LBXHGB|anemi)"
+    - "(confound|deficien|baseline|target population)"
+  forbidden_terms:
+    - "iron does not raise hemoglobin"
+rubric:
+  - identifies_population_difference
+  - distinguishes_observational_from_experimental
+  - calls_triangulation_tool

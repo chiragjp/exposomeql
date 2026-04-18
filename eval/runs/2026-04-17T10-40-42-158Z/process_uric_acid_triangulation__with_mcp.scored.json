@@ -1,0 +1,42 @@
+{
+  "prompt_id": "process_uric_acid_triangulation",
+  "category": "process_triangulation",
+  "arm": "with_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 173,
+  "iterations": 1,
+  "error": "400 Invalid schema for function 'nhanes_model': [{'type': 'string'}, {'type': 'string'}] is not of type 'object', 'boolean'.",
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(SLC22A11|ABCG2|URAT1|urate transporter)",
+        "matched": false
+      },
+      {
+        "term": "(CTD|toxicogenom|gene|pathway|mechanism)",
+        "matched": false
+      },
+      {
+        "term": "(triangul|converg)",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [],
+    "required_tools_called": [
+      {
+        "tool_pattern": "(epwas_search|epwas_summary)",
+        "called": false
+      },
+      {
+        "tool_pattern": "ctd_triangulate|ctd_chemical_genes",
+        "called": false
+      }
+    ],
+    "pass": false
+  }
+}

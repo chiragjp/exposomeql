@@ -1,0 +1,47 @@
+{
+  "prompt_id": "process_pfas_albumin_confounder",
+  "category": "process_confounding",
+  "arm": "with_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 170,
+  "iterations": 1,
+  "error": "400 Invalid schema for function 'nhanes_model': [{'type': 'string'}, {'type': 'string'}] is not of type 'object', 'boolean'.",
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(albumin|protein.bind|binding|pharmacokinet|reverse caus|healthy (participant|volunteer)|selection|disease.driven|secular|simpson|artifact|spurious|not causal)",
+        "matched": false
+      },
+      {
+        "term": "(paradox|protective|inverse|lower|negative association)",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "PFAS protect against",
+        "matched": false
+      },
+      {
+        "term": "PFAS reduce(s)? risk of",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [
+      {
+        "tool_pattern": "epwas_search|epwas_summary",
+        "called": false
+      },
+      {
+        "tool_pattern": "confounder_check",
+        "called": false
+      }
+    ],
+    "pass": false
+  }
+}

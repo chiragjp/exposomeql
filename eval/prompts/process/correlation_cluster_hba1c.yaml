@@ -1,0 +1,20 @@
+id: process_correlation_cluster_hba1c
+category: process_correlation_structure
+prompt: |
+  Among the environmental exposures most strongly associated with
+  glycohemoglobin (HbA1c / LBXGH), which ones cluster together based on
+  exposure-exposure correlations? Identify the main clusters and what they
+  represent chemically or by source.
+expected:
+  required_cluster: organochlorines_PCBs
+required_tools:
+  - "exposure_correlation_matrix"
+deterministic_checks:
+  required_terms:
+    - "(cluster|correlat|group together|co.occur|related)"
+    - "(PCB|organochlor|HCH|DDT|LBXPCB|LBXHPE|LBXOXY|LBXDIE)"
+    - "(HbA1c|LBXGH)"
+rubric:
+  - identifies_organochlorine_cluster
+  - uses_correlation_matrix_tool
+  - interprets_clusters_chemically

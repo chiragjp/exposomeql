@@ -1,0 +1,20 @@
+id: outcome_pfoa_uric_acid
+category: outcome
+prompt: |
+  Does PFOA exposure raise serum uric acid in the US population? Cite numbers and mechanism.
+expected:
+  direction: positive
+  effect_size_anchor:
+    beta: 0.111
+    p_value: "<1e-4"
+deterministic_checks:
+  required_terms:
+    - "(PFOA|LBXPFOA)"
+    - "(uric acid|LBXSUA)"
+    - "(SLC22A11|ABCG2|URAT1|urate transporter)"
+  forbidden_terms: []
+rubric:
+  - directional_correctness
+  - cites_specific_estimate
+  - mechanism_grounded
+  - dose_context

@@ -1,0 +1,32 @@
+{
+  "prompt_id": "process_uric_acid_triangulation",
+  "category": "process_triangulation",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "length",
+  "input_tokens": 53,
+  "output_tokens": 4096,
+  "latency_ms": 50487,
+  "iterations": 1,
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(SLC22A11|ABCG2|URAT1|urate transporter)",
+        "matched": false
+      },
+      {
+        "term": "(CTD|toxicogenom|gene|pathway|mechanism)",
+        "matched": false
+      },
+      {
+        "term": "(triangul|converg)",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [],
+    "required_tools_called": [],
+    "pass": false
+  }
+}

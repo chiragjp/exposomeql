@@ -1,0 +1,13 @@
+{
+  "prompt_id": "quant_bonferroni_threshold",
+  "category": "quantitative",
+  "arm": "without_mcp",
+  "model": "gemini-2.5-pro",
+  "final_text": "Based on the \"A catalog of environment-wide association studies\" paper by Patel and Manrai (Nature Communications, 2020), which presents the NHANES EP-WAS (also called EWAS) meta-analysis:\n\n*   **Numeric Threshold:** **9.0 x 10⁻⁶**\n*   **Number of Tests:** **5,538**\n\nThis catalog-wide Bonferroni threshold is calculated by dividing the standard alpha level (α = 0.05) by the total number of environment-phenotype association tests in the catalog (0.05 / 5,538). This single, stringent threshold is applied to the results from all models, including model 6, to correct for multiple hypothesis testing.",
+  "tool_trace": [],
+  "stop_reason": "STOP",
+  "input_tokens": 47,
+  "output_tokens": 159,
+  "latency_ms": 15457,
+  "iterations": 1
+}

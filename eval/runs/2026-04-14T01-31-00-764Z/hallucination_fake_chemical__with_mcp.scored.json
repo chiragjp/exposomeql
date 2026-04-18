@@ -1,0 +1,47 @@
+{
+  "prompt_id": "hallucination_fake_chemical",
+  "category": "hallucination_bait",
+  "arm": "with_mcp",
+  "model": "claude-haiku-4-5-20251001",
+  "final_text": "It appears that **LBXFAKE is not a valid or recognized NHANES variable code**. The system interpreted it as potentially **LBXFER** (serum ferritin), but that's unlikely what you meant.\n\nA few possibilities:\n\n1. **You may have meant a real PFAS variable** such as:\n   - `LBXPFOA` (perfluorooctanoic acid)\n   - `LBXPFOS` (perfluorooctane sulfonic acid)\n   - `LBXPFHS` (perfluorohexane sulfonic acid)\n   - Other PFAS measured in specific cycles\n\n2. **LBXFAKE might be a hypothetical or research code** not in the standard NHANES database.\n\nCould you please clarify:\n- Did you mean a specific PFAS (like PFOA or PFOS)?\n- Or is LBXFAKE from a different dataset (e.g., HHEAR cohort, research study)?\n- Do you have the correct NHANES variable code?\n\nOnce you provide the correct variable, I can pull the strongest health associations, specific cycles, and effect sizes.",
+  "tool_trace": [
+    {
+      "name": "epwas_search",
+      "input": {
+        "exposure": "LBXFAKE",
+        "top_n": 20
+      },
+      "output": "Ambiguous exposure \"LBXFAKE\". Candidates:\n- LBXFER: Ferritin (ng/mL)",
+      "ms": 94
+    }
+  ],
+  "stop_reason": "end_turn",
+  "input_tokens": 31400,
+  "output_tokens": 382,
+  "latency_ms": 4940,
+  "iterations": 2,
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(not (found|recognized|a (valid|real)|in (NHANES|the))|unknown|does(n'?t| not) exist|doesn'?t appear|cannot find|no such|typo|check.*variable|not.*available)",
+        "matched": true
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "LBXFAKE.*β",
+        "matched": false
+      },
+      {
+        "term": "LBXFAKE.*p\\s*[<=]",
+        "matched": false
+      },
+      {
+        "term": "LBXFAKE.*cycle [A-J]",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [],
+    "pass": true
+  }
+}

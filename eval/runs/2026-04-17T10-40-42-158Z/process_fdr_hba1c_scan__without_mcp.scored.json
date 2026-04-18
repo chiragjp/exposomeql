@@ -1,0 +1,38 @@
+{
+  "prompt_id": "process_fdr_hba1c_scan",
+  "category": "process_multiple_comparisons",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 123,
+  "iterations": 1,
+  "error": "400 Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(BH|benjamini|FDR|q[-\\s]?value|q<0\\.05|scan.specific)",
+        "matched": false
+      },
+      {
+        "term": "(HbA1c|LBXGH|glycohemoglobin)",
+        "matched": false
+      },
+      {
+        "term": "(nominal|raw p|uncorrected)",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "^[^q]*significant.*p\\s*<\\s*0\\.05[^q]*$",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [],
+    "pass": false
+  }
+}

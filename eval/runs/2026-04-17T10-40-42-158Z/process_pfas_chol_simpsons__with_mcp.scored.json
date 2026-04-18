@@ -1,0 +1,42 @@
+{
+  "prompt_id": "process_pfas_chol_simpsons",
+  "category": "process_simpsons",
+  "arm": "with_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 195,
+  "iterations": 1,
+  "error": "400 Invalid schema for function 'nhanes_model': [{'type': 'string'}, {'type': 'string'}] is not of type 'object', 'boolean'.",
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(within.cycle|per.cycle|cycle.specific)",
+        "matched": false
+      },
+      {
+        "term": "(pooled|meta.analy)",
+        "matched": false
+      },
+      {
+        "term": "(simpson|paradox|reversal|reverse)",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [],
+    "required_tools_called": [
+      {
+        "tool_pattern": "(epwas_search|epwas_summary)",
+        "called": false
+      },
+      {
+        "tool_pattern": "simpson_paradox_test",
+        "called": false
+      }
+    ],
+    "pass": false
+  }
+}

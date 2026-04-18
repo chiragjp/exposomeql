@@ -1,0 +1,38 @@
+{
+  "prompt_id": "outcome_pfas_thyroid_null",
+  "category": "outcome",
+  "arm": "with_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 313,
+  "iterations": 1,
+  "error": "400 Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(PFAS|PFOA|PFOS)",
+        "matched": false
+      },
+      {
+        "term": "(TSH|T4|T3|thyroid)",
+        "matched": false
+      },
+      {
+        "term": "(null|not significant|no signal|no association)",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "NHANES confirms.*thyroid",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [],
+    "pass": false
+  }
+}

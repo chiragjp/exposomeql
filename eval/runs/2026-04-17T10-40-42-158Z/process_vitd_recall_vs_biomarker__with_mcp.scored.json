@@ -1,0 +1,38 @@
+{
+  "prompt_id": "process_vitd_recall_vs_biomarker",
+  "category": "process_confounding",
+  "arm": "with_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 175,
+  "iterations": 1,
+  "error": "400 Invalid schema for function 'nhanes_model': [{'type': 'string'}, {'type': 'string'}] is not of type 'object', 'boolean'.",
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(serum|biomarker|LBDVIDMS|25.OH)",
+        "matched": false
+      },
+      {
+        "term": "(recall|DR1T|misclass|measurement error)",
+        "matched": false
+      },
+      {
+        "term": "(triangulat|RCT|experimental)",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [],
+    "required_tools_called": [
+      {
+        "tool_pattern": "(nutrient_biomarker_vs_dietary|nutrient_triangulate)",
+        "called": false
+      }
+    ],
+    "pass": false
+  }
+}

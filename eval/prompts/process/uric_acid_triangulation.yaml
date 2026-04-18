@@ -1,0 +1,25 @@
+id: process_uric_acid_triangulation
+category: process_triangulation
+prompt: |
+  Three structurally unrelated chemicals — PFOA, lead, and cadmium — all appear to alter
+  uric acid handling in NHANES. Is this convergence biological or coincidental? Use mechanistic
+  evidence to decide.
+expected:
+  shared_genes:
+    - "SLC22A11"
+    - "ABCG2"
+    - "CAT"
+    - "SOD1"
+required_tools:
+  - "(epwas_search|epwas_summary)"
+  - "ctd_triangulate|ctd_chemical_genes"
+deterministic_checks:
+  required_terms:
+    - "(SLC22A11|ABCG2|URAT1|urate transporter)"
+    - "(CTD|toxicogenom|gene|pathway|mechanism)"
+    - "(triangul|converg)"
+  forbidden_terms: []
+rubric:
+  - calls_ctd_tool
+  - identifies_shared_pathway
+  - distinguishes_mechanism_from_correlation

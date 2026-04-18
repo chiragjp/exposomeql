@@ -1,0 +1,18 @@
+id: outcome_cadmium_uric_null
+category: outcome
+prompt: |
+  Some published cohort studies report cadmium raises serum uric acid. What does NHANES show?
+expected:
+  direction_in_data: null_or_weakly_negative
+  effect_size_anchor:
+    beta: -0.014
+    p_value: 0.11
+deterministic_checks:
+  required_terms:
+    - "(cadmium|LBXBCD)"
+    - "(uric acid|LBXSUA)"
+    - "(null|not (significant|robust)|non[- ]significant|weakens?|attenuat|p[-\\s]*(value)?[:=\\s]*0\\.1|no (association|effect)|opposite direction|discorda)"
+rubric:
+  - reports_null_finding
+  - does_not_overinterpret
+  - notes_published_disagreement

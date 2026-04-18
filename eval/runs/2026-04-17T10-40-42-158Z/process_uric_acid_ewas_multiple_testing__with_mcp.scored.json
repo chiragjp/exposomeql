@@ -1,0 +1,39 @@
+{
+  "prompt_id": "process_uric_acid_ewas_multiple_testing",
+  "category": "process_multiple_comparisons",
+  "arm": "with_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 225,
+  "iterations": 1,
+  "error": "400 Invalid schema for function 'nhanes_model': [{'type': 'string'}, {'type': 'string'}] is not of type 'object', 'boolean'.",
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(bonferroni|FDR|multiple test|3\\.0[0-2]e-?0?7|165[,]?342)",
+        "matched": false
+      },
+      {
+        "term": "(uric acid|LBXSUA)",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "p < 0\\.05.*significant",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [
+      {
+        "tool_pattern": "epwas_search|epwas_summary|epwas_phenotype_profile",
+        "called": false
+      }
+    ],
+    "pass": false
+  }
+}

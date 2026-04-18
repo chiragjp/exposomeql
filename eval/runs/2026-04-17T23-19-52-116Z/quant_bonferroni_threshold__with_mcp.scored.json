@@ -1,0 +1,44 @@
+{
+  "prompt_id": "quant_bonferroni_threshold",
+  "category": "quantitative",
+  "arm": "with_mcp",
+  "model": "gpt-5",
+  "final_text": "3.02e-7; 165,342 tests.",
+  "tool_trace": [
+    {
+      "name": "epwas_search",
+      "input": {
+        "exposure": "lead",
+        "model_number": 6,
+        "top_n": 5
+      },
+      "output": "{\n  \"query\": {\n    \"exposure\": \"LBXBPB\",\n    \"phenotype\": null\n  },\n  \"model\": \"age + age² + sex + ethnicity\",\n  \"multiple_testing\": {\n    \"total_tests\": 165342,\n    \"bonferroni_threshold\": 3.02e-7,\n    \"note\": \"P-values are nominal. Bonferroni threshold for the full EP-WAS catalog is 3.02e-07 (0.05 / 165,342 tests on model 6). For a hypothesis-driven single test you may use nominal p<0.05; for screening across many exposures/phenotypes apply Bonferroni or BH-FDR.\"\n  },\n  \"n_results\": 5,\n  \"n_survives_bonferroni\": 0,\n  \"results\": [\n    {\n      \"exposure\": \"LBXBPB\",\n      \"phenotype\": \"BMXHIP\",\n      \"estimate\": -0.1945580388156709,\n      \"std_error\": 0.024276999548812222,\n      \"p_value\": 0.00009013068777535181,\n      \"p_value_stouffer\": 0.00009013068777535181,\n      \"i_squared\": null,\n      \"h_squared\": null,\n      \"n_studies\": 1,\n      \"model_number\": 6,\n      \"exposure_description\": \"Blood lead (ug/dL)\",\n      \"phenotype_description\": \"BMXHIP\",\n      \"survives_bonferroni\": false\n    },\n    {\n      \"exposure\": \"LBXBPB\",\n      \"phenotype\": \"BMXCALF\",\n      \"estimate\": -0.19187589822965978,\n      \"std_error\": 0.00989085563664132,\n      \"p_value\": 0.00029920726801787695,\n      \"p_value_stouffer\": 4.5142884244377305e-23,\n      \"i_squared\": 0.06688541282172134,\n      \"h_squared\": 1.0716797419532167,\n      \"n_studies\": 4,\n      \"model_number\": 6,\n      \"exposure_description\": \"Blood lead (ug/dL)\",\n      \"phenotype_description\": \"Maximal Calf Circumference (cm)\",\n      \"survives_bonferroni\": false\n    },\n    {\n      \"exposure\": \"LBXBPB\",\n      \"phenotype\": \"BMXTHICR\",\n      \"estimate\": -0.1906608875869387,\n      \"std_error\": 0.008947347710184492,\n      \"p_value\": 0.00022611866763809648,\n      \"p_value_stouffer\": 9.698860528773597e-22,\n      \"i_squared\": 0,\n      \"h_squared\": 0.838139967805096,\n      \"n_studies\": 4,\n      \"model_number\": 6,\n      \"exposure_description\": \"Blood lead (ug/dL)\",\n      \"phenotype_description\": \"Thigh Circumference (cm)\",\n      \"survives_bonferroni\": false\n    },\n    {\n      \"exposure\": \"LBXBPB\",\n      \"phenotype\": \"LB2MCVSI\",\n      \"estimate\": 0.186704854939867,\n      \"std_error\": 0.07356365019489383,\n      \"p_value\": 0.0387768742108956,\n      \"p_value_stouffer\": 0.0387768742108956,\n      \"i_squared\": null,\n      \"h_squared\": null,\n      \"n_studies\": 1,\n      \"model_number\": 6,\n      \"exposure_description\": \"Blood lead (ug/dL)\",\n      \"phenotype_description\": \"Mean cell volume (fL)\",\n      \"survives_bonferroni\": false\n    },\n    {\n      \"exposure\": \"LBXBPB\",\n      \"phenotype\": \"DXDRLTOT\",\n      \"estimate\": -0.17933339643623997,\n      \"std_error\": 0.011812866907775565,\n      \"p_value\": 0.0006205983365226875,\n      \"p_value_stouffer\": 5.513438423210879e-12,\n      \"i_squared\": 0,\n      \"h_squared\": 0.8512410648069865,\n      \"n_studies\": 4,\n      \"model_number\": 6,\n      \"exposure_description\": \"Blood lead (ug/dL)\",\n      \"phenotype_description\": \"Right Leg Total (grams)\",\n      \"survives_bonferroni\": false\n    }\n  ],\n  \"note\": \"Effect sizes are from survey-weighted linear regression with exposure log10-transformed and z-scored. P-values are nominal; see multiple_testing for the Bonferroni threshold and survives_bonferroni per row.\"\n}",
+      "ms": 179
+    }
+  ],
+  "stop_reason": "stop",
+  "input_tokens": 19001,
+  "output_tokens": 1209,
+  "latency_ms": 15192,
+  "iterations": 2,
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(3\\.0[012]e-?0?7|3\\.0[012]\\s*[x×]\\s*10\\s*[⁻^-]\\s*[⁷7]|0\\.05\\s*[/÷]\\s*165[,]?342)",
+        "matched": true
+      },
+      {
+        "term": "165[,]?342",
+        "matched": true
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "(approximately|roughly|on the order of|I don'?t have access)",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [],
+    "pass": true
+  }
+}

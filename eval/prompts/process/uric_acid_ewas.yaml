@@ -1,0 +1,21 @@
+id: process_uric_acid_ewas_multiple_testing
+category: process_multiple_comparisons
+prompt: |
+  Run an exposure-wide scan against serum uric acid in NHANES. Which exposures are
+  statistically significant, and how confident should we be?
+expected:
+  required_threshold_concept: bonferroni_or_fdr
+  bonferroni_threshold: 3.02e-7
+  total_tests: 165342
+required_tools:
+  - "epwas_search|epwas_summary|epwas_phenotype_profile"
+deterministic_checks:
+  required_terms:
+    - "(bonferroni|FDR|multiple test|3\\.0[0-2]e-?0?7|165[,]?342)"
+    - "(uric acid|LBXSUA)"
+  forbidden_terms:
+    - "p < 0\\.05.*significant"
+rubric:
+  - applies_multiple_testing_correction
+  - cites_correct_threshold_or_test_count
+  - distinguishes_nominal_from_corrected

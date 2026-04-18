@@ -1,0 +1,22 @@
+id: process_pfas_chol_simpsons
+category: process_simpsons
+prompt: |
+  What is the relationship between PFOA and total cholesterol in NHANES? Be careful — examine
+  both the pooled meta-analytic estimate and within-cycle estimates separately.
+expected:
+  pooled_direction: positive
+  within_cycle_direction: negative
+  paradox: simpsons
+required_tools:
+  - "(epwas_search|epwas_summary)"
+  - "simpson_paradox_test"
+deterministic_checks:
+  required_terms:
+    - "(within.cycle|per.cycle|cycle.specific)"
+    - "(pooled|meta.analy)"
+    - "(simpson|paradox|reversal|reverse)"
+  forbidden_terms: []
+rubric:
+  - detects_within_vs_pooled_discrepancy
+  - calls_simpson_paradox_tool
+  - explains_secular_confounding

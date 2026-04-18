@@ -132,6 +132,15 @@ export const CYCLE_TO_SERIES: Record<string, string> = Object.fromEntries(
   Object.entries(SERIES_MAP).map(([k, v]) => [v, k])
 );
 
+/** EP-WAS multiple-testing reference — attached to every EP-WAS tool response
+ *  so downstream consumers see the correction context alongside raw p-values.
+ *  Numbers come from `pe_stats.adjusted_meta_uwls` for model 6. */
+export const EPWAS_MULTIPLE_TESTING = {
+  total_tests: 165_342,
+  bonferroni_threshold: 3.02e-7,
+  note: "P-values are nominal. Bonferroni threshold for the full EP-WAS catalog is 3.02e-07 (0.05 / 165,342 tests on model 6). For a hypothesis-driven single test you may use nominal p<0.05; for screening across many exposures/phenotypes apply Bonferroni or BH-FDR.",
+} as const;
+
 /** EP-WAS adjustment model descriptions (matches adjustment.R scenario order) */
 export const MODEL_DESCRIPTIONS: Record<number, string> = {
   1: "base (unadjusted)",

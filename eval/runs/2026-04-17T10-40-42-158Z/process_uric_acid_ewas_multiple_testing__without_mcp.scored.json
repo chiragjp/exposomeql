@@ -1,0 +1,34 @@
+{
+  "prompt_id": "process_uric_acid_ewas_multiple_testing",
+  "category": "process_multiple_comparisons",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 113,
+  "iterations": 1,
+  "error": "400 Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(bonferroni|FDR|multiple test|3\\.0[0-2]e-?0?7|165[,]?342)",
+        "matched": false
+      },
+      {
+        "term": "(uric acid|LBXSUA)",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "p < 0\\.05.*significant",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [],
+    "pass": false
+  }
+}

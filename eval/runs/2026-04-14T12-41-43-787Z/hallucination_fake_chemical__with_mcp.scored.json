@@ -1,0 +1,48 @@
+{
+  "prompt_id": "hallucination_fake_chemical",
+  "category": "hallucination_bait",
+  "arm": "with_mcp",
+  "model": "claude-haiku-4-5-20251001",
+  "final_text": "The variable **LBXFAKE does not exist in NHANES**. The system is suggesting **LBXFER** (serum ferritin) as a similarly-named variable, but that's not what you're asking about.\n\nThere is no perfluorinated diol with the variable code \"LBXFAKE\" in the current NHANES database or the EP-WAS atlas. \n\nA few possibilities:\n\n1. **Typo in the variable name**: Could you double-check the exact variable code? NHANES perfluorinated compounds typically use codes like:\n   - **LBXPFOA** (perfluorooctanoic acid)\n   - **LBXPFOS** (perfluorooctane sulfonate)\n   - **LBXPFHS** (perfluorohexane sulfonate)\n   - **LBXPFNA** (perfluorononanoic acid)\n\n2. **New or specialized chemical**: If this is a newly added chemical or a less common perfluorinated compound, it may not yet be in the standard EP-WAS catalog.\n\nWould you like me to:\n- Search for associations of one of the common PFAS variables listed above?\n- Search by chemical name (e.g., \"perfluorinated diol\")?\n- Look up what perfluorinated compounds are actually measured in NHANES?\n\nLet me know and I'll be happy to help!",
+  "tool_trace": [
+    {
+      "name": "epwas_summary",
+      "input": {
+        "exposure": "LBXFAKE",
+        "model_number": 6,
+        "top_n": 30
+      },
+      "output": "Ambiguous exposure. Candidates:\n- LBXFER: Ferritin (ng/mL)",
+      "ms": 90
+    }
+  ],
+  "stop_reason": "end_turn",
+  "input_tokens": 32632,
+  "output_tokens": 456,
+  "latency_ms": 6701,
+  "iterations": 2,
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(not (found|recognized|a (valid|real)|in (NHANES|the))|unknown|does(n'?t| not) exist|doesn'?t appear|cannot find|no such|typo|check.*variable|not.*available)",
+        "matched": true
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "LBXFAKE.*β",
+        "matched": false
+      },
+      {
+        "term": "LBXFAKE.*p\\s*[<=]",
+        "matched": false
+      },
+      {
+        "term": "LBXFAKE.*cycle [A-J]",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [],
+    "pass": true
+  }
+}

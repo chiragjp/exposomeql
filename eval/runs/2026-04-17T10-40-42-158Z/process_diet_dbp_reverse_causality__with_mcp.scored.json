@@ -1,0 +1,39 @@
+{
+  "prompt_id": "process_diet_dbp_reverse_causality",
+  "category": "process_reverse_causality",
+  "arm": "with_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 193,
+  "iterations": 1,
+  "error": "400 Invalid schema for function 'nhanes_model': [{'type': 'string'}, {'type': 'string'}] is not of type 'object', 'boolean'.",
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(reverse caus|diagnosed|treatment|medication|after.*diagnosis|confound|caloric|total (intake|energy|food)|diet quality|age|healthier|unhealth)",
+        "matched": false
+      },
+      {
+        "term": "(sodium|potassium|magnesium|DBP|diastolic)",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "salt.*lowers blood pressure",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [
+      {
+        "tool_pattern": "nhanes_sensitivity",
+        "called": false
+      }
+    ],
+    "pass": false
+  }
+}

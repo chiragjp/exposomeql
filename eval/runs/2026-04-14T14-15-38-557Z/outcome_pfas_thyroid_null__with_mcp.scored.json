@@ -1,0 +1,319 @@
+{
+  "prompt_id": "outcome_pfas_thyroid_null",
+  "category": "outcome",
+  "arm": "with_mcp",
+  "model": "claude-opus-4-6",
+  "final_text": "Excellent — I now have a comprehensive picture. Here's the full synthesis:\n\n---\n\n# PFAS and Thyroid Function in NHANES: A Systematic Assessment\n\n## Bottom Line: **Very weak epidemiological support despite clear mechanistic plausibility**\n\nThe NHANES EP-WAS data across the general adult US population show **essentially no statistically significant associations** between the major PFAS compounds and thyroid hormones, despite strong *in vitro* and *in vivo* mechanistic evidence from the toxicological literature.\n\n---\n\n## 1. Hormone-by-Hormone Results\n\n### TSH (Thyroid Stimulating Hormone) — `LBXTSH`\n| PFAS | β (fully adjusted) | p-value | Significant? |\n|------|---|---|---|\n| PFOA | — | — | ❌ No data meeting threshold |\n| PFOS | — | — | ❌ No data meeting threshold |\n| PFHxS | — | — | ❌ No data meeting threshold |\n| PFNA | — | — | ❌ No data meeting threshold |\n| PFDeA | — | — | ❌ No data meeting threshold |\n\n**Verdict:** No PFAS compound showed any association with TSH in either the fully adjusted or partially adjusted models. The associations were so null they didn't even enter the EP-WAS catalog.\n\n### Free T4 (Thyroxine) — `LBXT4F`\n| PFAS | β | p-value | Significant? |\n|------|---|---------|---|\n| PFNA | −0.033 | 0.28 | ❌ |\n| PFHxS | −0.011 | 0.76 | ❌ |\n| PFOA | +0.009 | 0.67 | ❌ |\n| PFDeA | +0.004 | 0.90 | ❌ |\n| PFOS | −0.001 | 0.97 | ❌ |\n\n**Verdict:** All null. Effect sizes are essentially zero. Not even a trend.\n\n### Total T4 — `LBXT4`\nNo PFAS compound had an association strong enough to appear in the EP-WAS catalog. **Complete null.**\n\n### Free T3 (Triiodothyronine) — `LBXT3F` ⚠️ *One marginal hit*\n| PFAS | β (fully adjusted) | p-value | Significant? |\n|------|---|---|---|\n| **PFNA** | **+0.034** | **0.032** | **✅ (marginal)** |\n| PFOA | +0.051 | 0.30 | ❌ |\n| PFHxS | +0.027 | 0.52 | ❌ |\n| PFOS | +0.001 | 0.92 | ❌ |\n| PFDeA | −0.001 | 0.95 | ❌ |\n\n**But this hit is fragile.** Vibration of Effects analysis shows:\n- β ranges from **−0.034** (sex-only model) to **+0.056** (age-only model)\n- Only 2 of 9 models reach p < 0.05\n- The unadjusted β is near zero (+0.004, p = 0.91)\n- **HIGH sensitivity** to analytic specification — the association is driven by the particular covariate set chosen\n\n### Total T3 — `LBXTT3`\n| PFAS | β | p-value | Significant? |\n|------|---|---------|---|\n| PFDeA | −0.064 | 0.22 | ❌ |\n| PFHxS | +0.030 | 0.56 | ❌ |\n| PFOS | −0.028 | 0.49 | ❌ |\n| PFOA | +0.016 | 0.77 | ❌ |\n| PFNA | −0.016 | 0.35 | ❌ |\n\n**Verdict:** All null.\n\n---\n\n## 2. Summary Scorecard\n\n| Thyroid Marker | # PFAS Tested | # Significant (p<0.05) | Robust? |\n|---|---|---|---|\n| **TSH** | 5 | 0 / 5 | ❌ Null |\n| **Free T4** | 5 | 0 / 5 | ❌ Null |\n| **Total T4** | 5 | 0 / 5 | ❌ Null |\n| **Free T3** | 5 | 1 / 5 (PFNA, p=0.03) | ⚠️ Fragile — flips sign across models |\n| **Total T3** | 5 | 0 / 5 | ❌ Null |\n\n**Out of 25 PFAS × thyroid hormone tests, only 1 reached nominal significance, and it fails robustness checks.** At a 5% false positive rate, you'd expect ~1.25 hits by chance alone.\n\n---\n\n## 3. Why the Disconnect with ATSDR's Concern?\n\n### The mechanistic evidence IS real\nCTD curated data shows PFOA and PFOS have well-documented thyroid-relevant molecular mechanisms:\n\n| Mechanism | PFOA | PFOS |\n|---|---|---|\n| **TTR displacement** — Competitively inhibits T4 binding to transthyretin | ✅ | ✅ |\n| **DIO1 suppression** — Decreases deiodinase-1 (converts T4→T3) | ✅ | ✅ |\n| **TSH secretion effects** — Alters TSHB protein secretion | ✅ (both ↑ and ↓ reported) | ✅ (both ↑ and ↓ reported) |\n| **TSHR downregulation** — Decreases TSH receptor expression | ✅ | — |\n| **TPO inhibition** — Decreases thyroid peroxidase activity | — | ✅ |\n| **Thyroglobulin** — Increases TG expression | ✅ | — |\n\nCTD also catalogs direct curated evidence linking both PFOA and PFOS to \"Thyroid Diseases,\" and PFOS specifically to \"Thyroid Neoplasms.\"\n\n### Why NHANES may not detect it\n\n1. **Cross-sectional design**: NHANES measures PFAS and thyroid hormones simultaneously. Thyroid disruption may be a chronic, cumulative process not captured by a single timepoint.\n\n2. **Homeostatic compensation**: The hypothalamic-pituitary-thyroid (HPT) axis actively compensates. If PFAS displaces T4 from TTR, free T4 transiently rises → TSH falls → gland output decreases → new steady state at similar circulating levels. Cross-sectional studies would miss this dynamic.\n\n3. **Albumin binding confounding**: PFOA and PFOS are **strongly correlated with serum albumin** (β = +0.18 and +0.16, p < 0.001). Since both PFAS and thyroid hormones are protein-bound, shared binding proteins create a correlation structure that complicates interpretation — healthier individuals tend to have higher albumin, higher PFAS (slower clearance), and normal thyroid function.\n\n4. **Population exposure range**: General population PFAS levels (low ng/mL) may be below the threshold for clinically detectable thyroid perturbation. The CTD mechanisms are often demonstrated at higher concentrations. Occupational cohorts and communities with contaminated water (C8 Health Project) have shown associations at much higher exposures.\n\n5. **Vulnerable subpopulations**: ATSDR's concern may be most relevant to **pregnant women, neonates, and individuals with pre-existing thyroid disease** — subgroups where even small perturbations in thyroid economy have outsized clinical consequences. The general adult population has robust compensatory capacity.\n\n---\n\n## 4. Conclusion\n\n> **NHANES does NOT support a meaningful association between PFAS and thyroid hormones (TSH, T4, T3) in the general adult US population** at current exposure levels. The one marginally significant finding (PFNA → free T3) is statistically fragile and likely a chance finding.\n>\n> However, this does **not** refute ATSDR's classification. The molecular mechanisms (TTR displacement, DIO1/TPO inhibition, TSHB perturbation) are well-established. The null NHANES findings likely reflect: (a) homeostatic compensation masking effects in cross-section, (b) general population exposures below the effect threshold, and (c) the wrong study design to detect a dynamic, compensated endocrine perturbation.\n>\n> **Sensitive populations (pregnant women, fetuses, thyroid-disease patients)** and **highly-exposed communities** remain the appropriate targets for PFAS–thyroid concern — and those are the settings where positive associations have been published.",
+  "tool_trace": [
+    {
+      "name": "exposure_compare",
+      "input": {
+        "exposures": [
+          "LBXPFOA",
+          "LBXPFOS",
+          "LBXPFHS",
+          "LBXPFNA",
+          "LBXPFDE",
+          "LBXMFOS"
+        ],
+        "phenotype": "thyroid stimulating hormone",
+        "model_number": 2
+      },
+      "output": "Ambiguous phenotype \"thyroid stimulating hormone\". Candidates:\n- LBXTSH: Thyroid stimulating hormone (TSH) (IU/L)\n- LBDTSH1S: Thyroid stimulating hormone (mIU/L)\n- LBXTSH1: Thyroid stimulating hormone (uIU/mL)\n- LBXFSH: Follicle stimulating hormone (mIU/mL)\n- LB2FSHSI: Follicle stimulating hormone (IU/L)",
+      "ms": 353
+    },
+    {
+      "name": "exposure_compare",
+      "input": {
+        "exposures": [
+          "LBXPFOA",
+          "LBXPFOS",
+          "LBXPFHS",
+          "LBXPFNA",
+          "LBXPFDE",
+          "LBXMFOS"
+        ],
+        "phenotype": "total T4",
+        "model_number": 2
+      },
+      "output": "Ambiguous phenotype \"total T4\". Candidates:\n- SSTOTAL: Total_Protein\n- DXXTOTBS: Total Trabecular Bone Score\n- LBXTC: Total cholesterol (mg/dL)\n- LBXBCC: total b-Carotene(ug/dL)\n- DXDTOTOT: Total Lean+Fat(g)",
+      "ms": 73
+    },
+    {
+      "name": "exposure_compare",
+      "input": {
+        "exposures": [
+          "LBXPFOA",
+          "LBXPFOS",
+          "LBXPFHS",
+          "LBXPFNA",
+          "LBXPFDE",
+          "LBXMFOS"
+        ],
+        "phenotype": "free T4",
+        "model_number": 2
+      },
+      "output": "Ambiguous phenotype \"free T4\". Candidates:\n- LBXP2: Free prostate specific antigen (ng/mL)\n- LBDT4FSI: Thyroxine, free (pmol/L)\n- LBXT4F: Thyroxine, free (ng/dL)",
+      "ms": 57
+    },
+    {
+      "name": "exposure_compare",
+      "input": {
+        "exposures": [
+          "LBXPFOA",
+          "LBXPFOS",
+          "LBXPFHS",
+          "LBXPFNA",
+          "LBXPFDE",
+          "LBXMFOS"
+        ],
+        "phenotype": "total T3",
+        "model_number": 2
+      },
+      "output": "Ambiguous phenotype \"total T3\". Candidates:\n- SSTOTAL: Total_Protein\n- DXXTOTBS: Total Trabecular Bone Score\n- LBXTC: Total cholesterol (mg/dL)\n- LBXBCC: total b-Carotene(ug/dL)\n- DXDTOTOT: Total Lean+Fat(g)",
+      "ms": 71
+    },
+    {
+      "name": "exposure_compare",
+      "input": {
+        "exposures": [
+          "LBXPFOA",
+          "LBXPFOS",
+          "LBXPFHS",
+          "LBXPFNA",
+          "LBXPFDE",
+          "LBXMFOS"
+        ],
+        "phenotype": "free T3",
+        "model_number": 2
+      },
+      "output": "Ambiguous phenotype \"free T3\". Candidates:\n- LBXP2: Free prostate specific antigen (ng/mL)\n- LBDT4FSI: Thyroxine, free (pmol/L)\n- LBXT4F: Thyroxine, free (ng/dL)",
+      "ms": 57
+    },
+    {
+      "name": "exposure_compare",
+      "input": {
+        "exposures": [
+          "LBXPFOA",
+          "LBXPFOS",
+          "LBXPFHS",
+          "LBXPFNA",
+          "LBXPFDE",
+          "LBXMFOS"
+        ],
+        "phenotype": "LBXTSH",
+        "model_number": 2
+      },
+      "output": "{\n  \"phenotype\": \"LBXTSH\",\n  \"phenotype_description\": \"Thyroid stimulating hormone (TSH) (IU/L)\",\n  \"model\": \"age + age² + sex + ethnicity + income + education (fully adjusted)\",\n  \"n_exposures_queried\": 6,\n  \"n_significant\": 0,\n  \"comparison\": [\n    {\n      \"exposure\": \"LBXPFOA\",\n      \"exposure_description\": \"Perfluorooctanoic acid\",\n      \"status\": \"no_association_found\"\n    },\n    {\n      \"exposure\": \"LBXPFOS\",\n      \"exposure_description\": \"Perfluorooctane sulfonic acid\",\n      \"status\": \"no_association_found\"\n    },\n    {\n      \"exposure\": \"LBXPFHS\",\n      \"exposure_description\": \"Perfluorohexane sulfonic acid (PFHxS) (ng/mL)\",\n      \"status\": \"no_association_found\"\n    },\n    {\n      \"exposure\": \"LBXPFNA\",\n      \"exposure_description\": \"Perfluorononanoic acid (PFNA) (ng/mL)\",\n      \"status\": \"no_association_found\"\n    },\n    {\n      \"exposure\": \"LBXPFDE\",\n      \"exposure_description\": \"Perfluorodecanoic acid (PFDeA) (ng/mL)\",\n      \"status\": \"no_association_found\"\n    },\n    {\n      \"exposure\": \"LBXMFOS\",\n      \"exposure_description\": \"Perfluoromethylheptane sulfonic acid isomers (Sm-PFOS) (ng/mL)\",\n      \"status\": \"no_association_found\"\n    }\n  ]\n}",
+      "ms": 1742
+    },
+    {
+      "name": "exposure_compare",
+      "input": {
+        "exposures": [
+          "LBXPFOA",
+          "LBXPFOS",
+          "LBXPFHS",
+          "LBXPFNA",
+          "LBXPFDE",
+          "LBXMFOS"
+        ],
+        "phenotype": "LBXT4F",
+        "model_number": 2
+      },
+      "output": "{\n  \"phenotype\": \"LBXT4F\",\n  \"phenotype_description\": \"Thyroxine, free (ng/dL)\",\n  \"model\": \"age + age² + sex + ethnicity + income + education (fully adjusted)\",\n  \"n_exposures_queried\": 6,\n  \"n_significant\": 0,\n  \"comparison\": [\n    {\n      \"exposure\": \"LBXPFNA\",\n      \"exposure_description\": \"Perfluorononanoic acid (PFNA) (ng/mL)\",\n      \"estimate\": -0.03262412687239169,\n      \"p_value\": 0.2838046484550384,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"i_squared\": 0,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFHS\",\n      \"exposure_description\": \"Perfluorohexane sulfonic acid (PFHxS) (ng/mL)\",\n      \"estimate\": -0.010936276170315732,\n      \"p_value\": 0.764416388176311,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"i_squared\": 0.19951933096182212,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFOA\",\n      \"exposure_description\": \"Perfluorooctanoic acid\",\n      \"estimate\": 0.008519389571860986,\n      \"p_value\": 0.6696025371336154,\n      \"direction\": \"positive\",\n      \"significant\": false,\n      \"i_squared\": 0,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFDE\",\n      \"exposure_description\": \"Perfluorodecanoic acid (PFDeA) (ng/mL)\",\n      \"estimate\": 0.004492868837425102,\n      \"p_value\": 0.8951753067720509,\n      \"direction\": \"positive\",\n      \"significant\": false,\n      \"i_squared\": 0.3603282057037981,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFOS\",\n      \"exposure_description\": \"Perfluorooctane sulfonic acid\",\n      \"estimate\": -0.0009704884265502905,\n      \"p_value\": 0.969189505992818,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"i_squared\": 0,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXMFOS\",\n      \"exposure_description\": \"Perfluoromethylheptane sulfonic acid isomers (Sm-PFOS) (ng/mL)\",\n      \"status\": \"no_association_found\"\n    }\n  ]\n}",
+      "ms": 1693
+    },
+    {
+      "name": "exposure_compare",
+      "input": {
+        "exposures": [
+          "LBXPFOA",
+          "LBXPFOS",
+          "LBXPFHS",
+          "LBXPFNA",
+          "LBXPFDE",
+          "LBXMFOS"
+        ],
+        "phenotype": "LBXT4",
+        "model_number": 2
+      },
+      "output": "{\n  \"phenotype\": \"LBXT4\",\n  \"phenotype_description\": \"Thyroxine (T4) (ug/dL)\",\n  \"model\": \"age + age² + sex + ethnicity + income + education (fully adjusted)\",\n  \"n_exposures_queried\": 6,\n  \"n_significant\": 0,\n  \"comparison\": [\n    {\n      \"exposure\": \"LBXPFOA\",\n      \"exposure_description\": \"Perfluorooctanoic acid\",\n      \"status\": \"no_association_found\"\n    },\n    {\n      \"exposure\": \"LBXPFOS\",\n      \"exposure_description\": \"Perfluorooctane sulfonic acid\",\n      \"status\": \"no_association_found\"\n    },\n    {\n      \"exposure\": \"LBXPFHS\",\n      \"exposure_description\": \"Perfluorohexane sulfonic acid (PFHxS) (ng/mL)\",\n      \"status\": \"no_association_found\"\n    },\n    {\n      \"exposure\": \"LBXPFNA\",\n      \"exposure_description\": \"Perfluorononanoic acid (PFNA) (ng/mL)\",\n      \"status\": \"no_association_found\"\n    },\n    {\n      \"exposure\": \"LBXPFDE\",\n      \"exposure_description\": \"Perfluorodecanoic acid (PFDeA) (ng/mL)\",\n      \"status\": \"no_association_found\"\n    },\n    {\n      \"exposure\": \"LBXMFOS\",\n      \"exposure_description\": \"Perfluoromethylheptane sulfonic acid isomers (Sm-PFOS) (ng/mL)\",\n      \"status\": \"no_association_found\"\n    }\n  ]\n}",
+      "ms": 1688
+    },
+    {
+      "name": "exposure_compare",
+      "input": {
+        "exposures": [
+          "LBXPFOA",
+          "LBXPFOS",
+          "LBXPFHS",
+          "LBXPFNA",
+          "LBXPFDE",
+          "LBXMFOS"
+        ],
+        "phenotype": "LBXT3F",
+        "model_number": 2
+      },
+      "output": "{\n  \"phenotype\": \"LBXT3F\",\n  \"phenotype_description\": \"Triiodothyronine (T3), free (pg/mL)\",\n  \"model\": \"age + age² + sex + ethnicity + income + education (fully adjusted)\",\n  \"n_exposures_queried\": 6,\n  \"n_significant\": 1,\n  \"comparison\": [\n    {\n      \"exposure\": \"LBXPFOA\",\n      \"exposure_description\": \"Perfluorooctanoic acid\",\n      \"estimate\": 0.05148620348160898,\n      \"p_value\": 0.2950965939961687,\n      \"direction\": \"positive\",\n      \"significant\": false,\n      \"i_squared\": 0.4570699854312848,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFNA\",\n      \"exposure_description\": \"Perfluorononanoic acid (PFNA) (ng/mL)\",\n      \"estimate\": 0.03419426443397893,\n      \"p_value\": 0.03244478127619925,\n      \"direction\": \"positive\",\n      \"significant\": true,\n      \"i_squared\": 0,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFHS\",\n      \"exposure_description\": \"Perfluorohexane sulfonic acid (PFHxS) (ng/mL)\",\n      \"estimate\": 0.027359215278409996,\n      \"p_value\": 0.519597840535142,\n      \"direction\": \"positive\",\n      \"significant\": false,\n      \"i_squared\": 0.41562841739462786,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFOS\",\n      \"exposure_description\": \"Perfluorooctane sulfonic acid\",\n      \"estimate\": 0.001456617184519133,\n      \"p_value\": 0.924916152130195,\n      \"direction\": \"positive\",\n      \"significant\": false,\n      \"i_squared\": 0,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFDE\",\n      \"exposure_description\": \"Perfluorodecanoic acid (PFDeA) (ng/mL)\",\n      \"estimate\": -0.0009708196400284324,\n      \"p_value\": 0.951252516975077,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"i_squared\": 0,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXMFOS\",\n      \"exposure_description\": \"Perfluoromethylheptane sulfonic acid isomers (Sm-PFOS) (ng/mL)\",\n      \"status\": \"no_association_found\"\n    }\n  ]\n}",
+      "ms": 1680
+    },
+    {
+      "name": "exposure_compare",
+      "input": {
+        "exposures": [
+          "LBXPFOA",
+          "LBXPFOS",
+          "LBXPFHS",
+          "LBXPFNA",
+          "LBXPFDE",
+          "LBXMFOS"
+        ],
+        "phenotype": "LBXTT3",
+        "model_number": 2
+      },
+      "output": "{\n  \"phenotype\": \"LBXTT3\",\n  \"phenotype_description\": \"Triiodothyronine (T3), total (ng/dL)\",\n  \"model\": \"age + age² + sex + ethnicity + income + education (fully adjusted)\",\n  \"n_exposures_queried\": 6,\n  \"n_significant\": 0,\n  \"comparison\": [\n    {\n      \"exposure\": \"LBXPFDE\",\n      \"exposure_description\": \"Perfluorodecanoic acid (PFDeA) (ng/mL)\",\n      \"estimate\": -0.06357016906005504,\n      \"p_value\": 0.2194687243950861,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"i_squared\": 0.528692765391661,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFHS\",\n      \"exposure_description\": \"Perfluorohexane sulfonic acid (PFHxS) (ng/mL)\",\n      \"estimate\": 0.03033895450130549,\n      \"p_value\": 0.5605084905081682,\n      \"direction\": \"positive\",\n      \"significant\": false,\n      \"i_squared\": 0.7517223034603867,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFOS\",\n      \"exposure_description\": \"Perfluorooctane sulfonic acid\",\n      \"estimate\": -0.028176865491104913,\n      \"p_value\": 0.4942567307251039,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"i_squared\": 0.29114036754972855,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFOA\",\n      \"exposure_description\": \"Perfluorooctanoic acid\",\n      \"estimate\": 0.016406868982206488,\n      \"p_value\": 0.772305466231837,\n      \"direction\": \"positive\",\n      \"significant\": false,\n      \"i_squared\": 0.7997200022890443,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFNA\",\n      \"exposure_description\": \"Perfluorononanoic acid (PFNA) (ng/mL)\",\n      \"estimate\": -0.015518456788994271,\n      \"p_value\": 0.3527529135647474,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"i_squared\": 0,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXMFOS\",\n      \"exposure_description\": \"Perfluoromethylheptane sulfonic acid isomers (Sm-PFOS) (ng/mL)\",\n      \"status\": \"no_association_found\"\n    }\n  ]\n}",
+      "ms": 1677
+    },
+    {
+      "name": "epwas_vibration",
+      "input": {
+        "exposure": "LBXPFNA",
+        "phenotype": "LBXT3F"
+      },
+      "output": "{\n  \"exposure\": \"LBXPFNA\",\n  \"exposure_description\": \"Perfluorononanoic acid (PFNA) (ng/mL)\",\n  \"phenotype\": \"LBXT3F\",\n  \"phenotype_description\": \"Triiodothyronine (T3), free (pg/mL)\",\n  \"vibration_range\": {\n    \"min\": -0.033945768977296106,\n    \"max\": 0.055526445575319834,\n    \"range\": 0.08947221455261595\n  },\n  \"n_models\": 9,\n  \"results\": [\n    {\n      \"model_number\": 1,\n      \"estimate\": 0.004291791462998616,\n      \"std_error\": 0.029934670684800945,\n      \"p_value\": 0.9093443843496651,\n      \"i_squared\": 0.5652195528643142,\n      \"n_studies\": 2,\n      \"model_description\": \"base (unadjusted)\"\n    },\n    {\n      \"model_number\": 2,\n      \"estimate\": 0.03419426443397893,\n      \"std_error\": 0.0017441917411585453,\n      \"p_value\": 0.03244478127619925,\n      \"i_squared\": 0,\n      \"n_studies\": 2,\n      \"model_description\": \"age + age² + sex + ethnicity + income + education (fully adjusted)\"\n    },\n    {\n      \"model_number\": 3,\n      \"estimate\": 0.020716167435911138,\n      \"std_error\": 0.0014805926206997097,\n      \"p_value\": 0.045422230984612476,\n      \"i_squared\": 0,\n      \"n_studies\": 2,\n      \"model_description\": \"age + age² + sex\"\n    },\n    {\n      \"model_number\": 4,\n      \"estimate\": 0.055526445575319834,\n      \"std_error\": 0.006864725418970545,\n      \"p_value\": 0.07830785074747257,\n      \"i_squared\": 0,\n      \"n_studies\": 2,\n      \"model_description\": \"age + age²\"\n    },\n    {\n      \"model_number\": 5,\n      \"estimate\": -0.033945768977296106,\n      \"std_error\": 0.023015181216504713,\n      \"p_value\": 0.37930236324029165,\n      \"i_squared\": 0.2685314735453991,\n      \"n_studies\": 2,\n      \"model_description\": \"sex\"\n    },\n    {\n      \"model_number\": 6,\n      \"estimate\": 0.02745158207301188,\n      \"std_error\": 0.005155897814346039,\n      \"p_value\": 0.11819165128254833,\n      \"i_squared\": 0,\n      \"n_studies\": 2,\n      \"model_description\": \"age + age² + sex + ethnicity\"\n    },\n    {\n      \"model_number\": 7,\n      \"estimate\": 0.027658696896350077,\n      \"std_error\": 0.0027744597741320575,\n      \"p_value\": 0.06364678906702914,\n      \"i_squared\": 0,\n      \"n_studies\": 2,\n      \"model_description\": \"age + age² + sex + income + education\"\n    },\n    {\n      \"model_number\": 8,\n      \"estimate\": 0.033331099315718614,\n      \"std_error\": 0.02101487847752158,\n      \"p_value\": 0.35812182578446106,\n      \"i_squared\": 0.11277265492849743,\n      \"n_studies\": 2,\n      \"model_description\": \"income + education\"\n    },\n    {\n      \"model_number\": 9,\n      \"estimate\": 0.008833464527573897,\n      \"std_error\": 0.03454740055429001,\n      \"p_value\": 0.8406363575864226,\n      \"i_squared\": 0.7163660269907546,\n      \"n_studies\": 2,\n      \"model_description\": \"ethnicity\"\n    }\n  ],\n  \"interpretation\": \"HIGH sensitivity: effect estimate varies substantially across adjustment models. Interpret with caution.\"\n}",
+      "ms": 172
+    },
+    {
+      "name": "confounder_check",
+      "input": {
+        "exposure": "LBXPFOA"
+      },
+      "output": "{\n  \"exposure\": \"LBXPFOA\",\n  \"exposure_description\": \"Perfluorooctanoic acid\",\n  \"exposure_type\": \"serum_biomarker\",\n  \"exposure_type_warning\": \"Serum biomarkers may be affected by protein binding (check albumin) and lipid partitioning (check cholesterol).\",\n  \"n_confounders_checked\": 7,\n  \"n_strong_associations\": 1,\n  \"confounder_associations\": [\n    {\n      \"confounder\": \"Serum albumin\",\n      \"confounder_var\": \"LBXSAL\",\n      \"beta\": 0.17730055616864224,\n      \"p_value\": 0.00033141029708595683,\n      \"direction\": \"positive\",\n      \"significant\": true,\n      \"strong_association\": true,\n      \"mechanism\": \"Protein binding — toxicants that bind albumin (PFAS, metals) will correlate positively with albumin, creating healthy-participant bias\"\n    },\n    {\n      \"confounder\": \"BMI\",\n      \"confounder_var\": \"BMXBMI\",\n      \"beta\": -0.020996377877939256,\n      \"p_value\": 0.12657947677626627,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"strong_association\": false,\n      \"mechanism\": \"Volume of distribution — lipophilic compounds concentrate in lean individuals; caloric intake correlates with all dietary exposures\"\n    },\n    {\n      \"confounder\": \"Creatinine\",\n      \"confounder_var\": \"LBXSCR\",\n      \"beta\": -0.0828192481539242,\n      \"p_value\": 0.012456796517156775,\n      \"direction\": \"negative\",\n      \"significant\": true,\n      \"strong_association\": false,\n      \"mechanism\": \"For urinary biomarkers: urinary dilution affects concentration. For serum: kidney function affects excretion of many chemicals\"\n    },\n    {\n      \"confounder\": \"Hemoglobin\",\n      \"confounder_var\": \"LBXHGB\",\n      \"beta\": 0.13029078079292347,\n      \"p_value\": 0.0022748325024205974,\n      \"direction\": \"positive\",\n      \"significant\": true,\n      \"strong_association\": false,\n      \"mechanism\": \"For blood metals: >95% of lead is in RBCs; higher hemoglobin = more RBCs = higher measured metal\"\n    },\n    {\n      \"confounder\": \"WBC count\",\n      \"confounder_var\": \"LBXWBCSI\",\n      \"beta\": -0.010490530555573918,\n      \"p_value\": 0.2942901056309965,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"strong_association\": false,\n      \"mechanism\": \"Immune/inflammatory status — confounds immune outcome associations\"\n    },\n    {\n      \"confounder\": \"CRP\",\n      \"confounder_var\": \"LBXCRP\",\n      \"beta\": -0.03502028384987741,\n      \"p_value\": 0.12149259210465443,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"strong_association\": false,\n      \"mechanism\": \"Acute phase response — inflammation affects albumin (negative), ferritin (positive), and many biomarkers\"\n    },\n    {\n      \"confounder\": \"Total cholesterol\",\n      \"confounder_var\": \"LBXTC\",\n      \"beta\": 0.06063995093121206,\n      \"p_value\": 0.048926721789788866,\n      \"direction\": \"positive\",\n      \"significant\": true,\n      \"strong_association\": false,\n      \"mechanism\": \"Lipophilic partitioning — PFAS and other lipophilic compounds partition into lipid-rich compartments\"\n    }\n  ],\n  \"warnings\": [\n    \"Serum albumin: LBXPFOA is strongly positively associated with Serum albumin (β=0.1773, p=3.31e-4). Protein binding — toxicants that bind albumin (PFAS, metals) will correlate positively with albumin, creating healthy-participant bias\"\n  ],\n  \"recommendation\": \"WARNING: LBXPFOA has 1 strong confounder association(s). Associations between LBXPFOA and health outcomes may be partially or fully confounded. Consider adjusting for these confounders or using triangulation (CTD, HHEAR, RCT) to validate findings.\"\n}",
+      "ms": 2093
+    },
+    {
+      "name": "confounder_check",
+      "input": {
+        "exposure": "LBXPFOS"
+      },
+      "output": "{\n  \"exposure\": \"LBXPFOS\",\n  \"exposure_description\": \"Perfluorooctane sulfonic acid\",\n  \"exposure_type\": \"serum_biomarker\",\n  \"exposure_type_warning\": \"Serum biomarkers may be affected by protein binding (check albumin) and lipid partitioning (check cholesterol).\",\n  \"n_confounders_checked\": 7,\n  \"n_strong_associations\": 2,\n  \"confounder_associations\": [\n    {\n      \"confounder\": \"Serum albumin\",\n      \"confounder_var\": \"LBXSAL\",\n      \"beta\": 0.16119015715601165,\n      \"p_value\": 0.0003356343967222936,\n      \"direction\": \"positive\",\n      \"significant\": true,\n      \"strong_association\": true,\n      \"mechanism\": \"Protein binding — toxicants that bind albumin (PFAS, metals) will correlate positively with albumin, creating healthy-participant bias\"\n    },\n    {\n      \"confounder\": \"BMI\",\n      \"confounder_var\": \"BMXBMI\",\n      \"beta\": -0.042664646856417084,\n      \"p_value\": 0.000547393820002809,\n      \"direction\": \"negative\",\n      \"significant\": true,\n      \"strong_association\": true,\n      \"mechanism\": \"Volume of distribution — lipophilic compounds concentrate in lean individuals; caloric intake correlates with all dietary exposures\"\n    },\n    {\n      \"confounder\": \"Creatinine\",\n      \"confounder_var\": \"LBXSCR\",\n      \"beta\": -0.08740475596850893,\n      \"p_value\": 0.010721729268086976,\n      \"direction\": \"negative\",\n      \"significant\": true,\n      \"strong_association\": false,\n      \"mechanism\": \"For urinary biomarkers: urinary dilution affects concentration. For serum: kidney function affects excretion of many chemicals\"\n    },\n    {\n      \"confounder\": \"Hemoglobin\",\n      \"confounder_var\": \"LBXHGB\",\n      \"beta\": 0.11204008996163889,\n      \"p_value\": 0.0017193074255495873,\n      \"direction\": \"positive\",\n      \"significant\": true,\n      \"strong_association\": false,\n      \"mechanism\": \"For blood metals: >95% of lead is in RBCs; higher hemoglobin = more RBCs = higher measured metal\"\n    },\n    {\n      \"confounder\": \"WBC count\",\n      \"confounder_var\": \"LBXWBCSI\",\n      \"beta\": -0.018575212415321625,\n      \"p_value\": 0.09380442976691308,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"strong_association\": false,\n      \"mechanism\": \"Immune/inflammatory status — confounds immune outcome associations\"\n    },\n    {\n      \"confounder\": \"CRP\",\n      \"confounder_var\": \"LBXCRP\",\n      \"beta\": -0.06316521626733686,\n      \"p_value\": 0.00342788713287216,\n      \"direction\": \"negative\",\n      \"significant\": true,\n      \"strong_association\": false,\n      \"mechanism\": \"Acute phase response — inflammation affects albumin (negative), ferritin (positive), and many biomarkers\"\n    },\n    {\n      \"confounder\": \"Total cholesterol\",\n      \"confounder_var\": \"LBXTC\",\n      \"beta\": 0.0649018475495742,\n      \"p_value\": 0.011901358001979808,\n      \"direction\": \"positive\",\n      \"significant\": true,\n      \"strong_association\": false,\n      \"mechanism\": \"Lipophilic partitioning — PFAS and other lipophilic compounds partition into lipid-rich compartments\"\n    }\n  ],\n  \"warnings\": [\n    \"Serum albumin: LBXPFOS is strongly positively associated with Serum albumin (β=0.1612, p=3.36e-4). Protein binding — toxicants that bind albumin (PFAS, metals) will correlate positively with albumin, creating healthy-participant bias\",\n    \"BMI: LBXPFOS is strongly negatively associated with BMI (β=-0.0427, p=5.47e-4). Volume of distribution — lipophilic compounds concentrate in lean individuals; caloric intake correlates with all dietary exposures\"\n  ],\n  \"recommendation\": \"WARNING: LBXPFOS has 2 strong confounder association(s). Associations between LBXPFOS and health outcomes may be partially or fully confounded. Consider adjusting for these confounders or using triangulation (CTD, HHEAR, RCT) to validate findings.\"\n}",
+      "ms": 2000
+    },
+    {
+      "name": "ctd_chemical_genes",
+      "input": {
+        "chemical": "PFOA",
+        "biological_context": "thyroid"
+      },
+      "output": "{\n  \"chemical\": \"Perfluorooctanoic acid (PFOA)\",\n  \"mesh_ids\": [\n    \"C023036\"\n  ],\n  \"nhanes_vars\": [\n    \"LBXPFOA\",\n    \"LBXNFOA\",\n    \"LBXBFOA\"\n  ],\n  \"organism\": \"Homo sapiens\",\n  \"biological_context\": \"thyroid\",\n  \"context_genes_queried\": [\n    \"TSHB\",\n    \"TG\",\n    \"TPO\",\n    \"DIO1\",\n    \"DIO2\",\n    \"DIO3\",\n    \"NIS\",\n    \"SLC5A5\",\n    \"TSHR\",\n    \"TTR\",\n    \"TBG\"\n  ],\n  \"total_interactions\": 7,\n  \"unique_genes\": 5,\n  \"showing\": 7,\n  \"interactions\": [\n    {\n      \"mesh_id\": \"C023036\",\n      \"chemical_name\": \"perfluorooctanoic acid\",\n      \"gene_symbol\": \"DIO1\",\n      \"gene_id\": 1733,\n      \"organism\": \"Homo sapiens\",\n      \"interaction\": \"perfluorooctanoic acid results in decreased expression of DIO1 mRNA\",\n      \"interaction_actions\": \"decreases^expression\",\n      \"pubmed_ids\": \"32588087\"\n    },\n    {\n      \"mesh_id\": \"C023036\",\n      \"chemical_name\": \"perfluorooctanoic acid\",\n      \"gene_symbol\": \"TG\",\n      \"gene_id\": 7038,\n      \"organism\": \"Homo sapiens\",\n      \"interaction\": \"perfluorooctanoic acid results in increased expression of TG mRNA\",\n      \"interaction_actions\": \"increases^expression\",\n      \"pubmed_ids\": \"34246126\"\n    },\n    {\n      \"mesh_id\": \"C023036\",\n      \"chemical_name\": \"perfluorooctanoic acid\",\n      \"gene_symbol\": \"TSHB\",\n      \"gene_id\": 7252,\n      \"organism\": \"Homo sapiens\",\n      \"interaction\": \"perfluorooctanoic acid results in decreased secretion of TSHB protein\",\n      \"interaction_actions\": \"decreases^secretion\",\n      \"pubmed_ids\": \"29488882\"\n    },\n    {\n      \"mesh_id\": \"C023036\",\n      \"chemical_name\": \"perfluorooctanoic acid\",\n      \"gene_symbol\": \"TSHB\",\n      \"gene_id\": 7252,\n      \"organism\": \"Homo sapiens\",\n      \"interaction\": \"perfluorooctanoic acid results in increased secretion of TSHB protein\",\n      \"interaction_actions\": \"increases^secretion\",\n      \"pubmed_ids\": \"36174755\"\n    },\n    {\n      \"mesh_id\": \"C023036\",\n      \"chemical_name\": \"perfluorooctanoic acid\",\n      \"gene_symbol\": \"TSHR\",\n      \"gene_id\": 7253,\n      \"organism\": \"Homo sapiens\",\n      \"interaction\": \"perfluorooctanoic acid results in decreased expression of TSHR mRNA\",\n      \"interaction_actions\": \"decreases^expression\",\n      \"pubmed_ids\": \"36326898\"\n    },\n    {\n      \"mesh_id\": \"C023036\",\n      \"chemical_name\": \"perfluorooctanoic acid\",\n      \"gene_symbol\": \"TTR\",\n      \"gene_id\": 7276,\n      \"organism\": \"Homo sapiens\",\n      \"interaction\": \"perfluorooctanoic acid affects the reaction [Thyroxine binds to TTR protein]\",\n      \"interaction_actions\": \"affects^binding|affects^reaction\",\n      \"pubmed_ids\": \"27528273\"\n    },\n    {\n      \"mesh_id\": \"C023036\",\n      \"chemical_name\": \"perfluorooctanoic acid\",\n      \"gene_symbol\": \"TTR\",\n      \"gene_id\": 7276,\n      \"organism\": \"Homo sapiens\",\n      \"interaction\": \"perfluorooctanoic acid inhibits the reaction [Thyroxine binds to TTR protein]\",\n      \"interaction_actions\": \"affects^binding|decreases^reaction\",\n      \"pubmed_ids\": \"31077750|39365753\"\n    }\n  ],\n  \"source\": \"Comparative Toxicogenomics Database (CTD), ctdbase.org\"\n}",
+      "ms": 12
+    },
+    {
+      "name": "ctd_chemical_genes",
+      "input": {
+        "chemical": "PFOS",
+        "biological_context": "thyroid"
+      },
+      "output": "{\n  \"chemical\": \"Perfluorooctane sulfonic acid (PFOS)\",\n  \"mesh_ids\": [\n    \"C076994\"\n  ],\n  \"nhanes_vars\": [\n    \"LBXPFOS\",\n    \"LBXNFOS\",\n    \"LBXMFOS\"\n  ],\n  \"organism\": \"Homo sapiens\",\n  \"biological_context\": \"thyroid\",\n  \"context_genes_queried\": [\n    \"TSHB\",\n    \"TG\",\n    \"TPO\",\n    \"DIO1\",\n    \"DIO2\",\n    \"DIO3\",\n    \"NIS\",\n    \"SLC5A5\",\n    \"TSHR\",\n    \"TTR\",\n    \"TBG\"\n  ],\n  \"total_interactions\": 7,\n  \"unique_genes\": 4,\n  \"showing\": 7,\n  \"interactions\": [\n    {\n      \"mesh_id\": \"C076994\",\n      \"chemical_name\": \"perfluorooctane sulfonic acid\",\n      \"gene_symbol\": \"DIO1\",\n      \"gene_id\": 1733,\n      \"organism\": \"Homo sapiens\",\n      \"interaction\": \"perfluorooctane sulfonic acid results in decreased expression of DIO1 mRNA\",\n      \"interaction_actions\": \"decreases^expression\",\n      \"pubmed_ids\": \"32588087\"\n    },\n    {\n      \"mesh_id\": \"C076994\",\n      \"chemical_name\": \"perfluorooctane sulfonic acid\",\n      \"gene_symbol\": \"TPO\",\n      \"gene_id\": 7173,\n      \"organism\": \"Homo sapiens\",\n      \"interaction\": \"perfluorooctane sulfonic acid results in decreased activity of TPO protein\",\n      \"interaction_actions\": \"decreases^activity\",\n      \"pubmed_ids\": \"21809831\"\n    },\n    {\n      \"mesh_id\": \"C076994\",\n      \"chemical_name\": \"perfluorooctane sulfonic acid\",\n      \"gene_symbol\": \"TSHB\",\n      \"gene_id\": 7252,\n      \"organism\": \"Homo sapiens\",\n      \"interaction\": \"perfluorooctane sulfonic acid results in increased secretion of TSHB protein\",\n      \"interaction_actions\": \"increases^secretion\",\n      \"pubmed_ids\": \"27219111\"\n    },\n    {\n      \"mesh_id\": \"C076994\",\n      \"chemical_name\": \"perfluorooctane sulfonic acid\",\n      \"gene_symbol\": \"TSHB\",\n      \"gene_id\": 7252,\n      \"organism\": \"Homo sapiens\",\n      \"interaction\": \"perfluorooctane sulfonic acid results in decreased expression of and results in decreased secretion of TSHB protein\",\n      \"interaction_actions\": \"decreases^expression|decreases^secretion\",\n      \"pubmed_ids\": \"19750101\"\n    },\n    {\n      \"mesh_id\": \"C076994\",\n      \"chemical_name\": \"perfluorooctane sulfonic acid\",\n      \"gene_symbol\": \"TSHB\",\n      \"gene_id\": 7252,\n      \"organism\": \"Homo sapiens\",\n      \"interaction\": \"perfluorooctane sulfonic acid results in decreased secretion of TSHB protein\",\n      \"interaction_actions\": \"decreases^secretion\",\n      \"pubmed_ids\": \"29488882\"\n    },\n    {\n      \"mesh_id\": \"C076994\",\n      \"chemical_name\": \"perfluorooctane sulfonic acid\",\n      \"gene_symbol\": \"TTR\",\n      \"gene_id\": 7276,\n      \"organism\": \"Homo sapiens\",\n      \"interaction\": \"perfluorooctane sulfonic acid affects the reaction [Thyroxine binds to TTR protein]\",\n      \"interaction_actions\": \"affects^binding|affects^reaction\",\n      \"pubmed_ids\": \"27528273\"\n    },\n    {\n      \"mesh_id\": \"C076994\",\n      \"chemical_name\": \"perfluorooctane sulfonic acid\",\n      \"gene_symbol\": \"TTR\",\n      \"gene_id\": 7276,\n      \"organism\": \"Homo sapiens\",\n      \"interaction\": \"perfluorooctane sulfonic acid inhibits the reaction [Thyroxine binds to TTR protein]\",\n      \"interaction_actions\": \"affects^binding|decreases^reaction\",\n      \"pubmed_ids\": \"31077750|39365753\"\n    }\n  ],\n  \"source\": \"Comparative Toxicogenomics Database (CTD), ctdbase.org\"\n}",
+      "ms": 11
+    },
+    {
+      "name": "exposure_compare",
+      "input": {
+        "exposures": [
+          "LBXPFOA",
+          "LBXPFOS",
+          "LBXPFHS",
+          "LBXPFNA",
+          "LBXPFDE"
+        ],
+        "phenotype": "LBXTSH",
+        "model_number": 6
+      },
+      "output": "{\n  \"phenotype\": \"LBXTSH\",\n  \"phenotype_description\": \"Thyroid stimulating hormone (TSH) (IU/L)\",\n  \"model\": \"age + age² + sex + ethnicity\",\n  \"n_exposures_queried\": 5,\n  \"n_significant\": 0,\n  \"comparison\": [\n    {\n      \"exposure\": \"LBXPFOA\",\n      \"exposure_description\": \"Perfluorooctanoic acid\",\n      \"status\": \"no_association_found\"\n    },\n    {\n      \"exposure\": \"LBXPFOS\",\n      \"exposure_description\": \"Perfluorooctane sulfonic acid\",\n      \"status\": \"no_association_found\"\n    },\n    {\n      \"exposure\": \"LBXPFHS\",\n      \"exposure_description\": \"Perfluorohexane sulfonic acid (PFHxS) (ng/mL)\",\n      \"status\": \"no_association_found\"\n    },\n    {\n      \"exposure\": \"LBXPFNA\",\n      \"exposure_description\": \"Perfluorononanoic acid (PFNA) (ng/mL)\",\n      \"status\": \"no_association_found\"\n    },\n    {\n      \"exposure\": \"LBXPFDE\",\n      \"exposure_description\": \"Perfluorodecanoic acid (PFDeA) (ng/mL)\",\n      \"status\": \"no_association_found\"\n    }\n  ]\n}",
+      "ms": 1455
+    },
+    {
+      "name": "exposure_compare",
+      "input": {
+        "exposures": [
+          "LBXPFOA",
+          "LBXPFOS",
+          "LBXPFHS",
+          "LBXPFNA",
+          "LBXPFDE"
+        ],
+        "phenotype": "LBXT4F",
+        "model_number": 6
+      },
+      "output": "{\n  \"phenotype\": \"LBXT4F\",\n  \"phenotype_description\": \"Thyroxine, free (ng/dL)\",\n  \"model\": \"age + age² + sex + ethnicity\",\n  \"n_exposures_queried\": 5,\n  \"n_significant\": 0,\n  \"comparison\": [\n    {\n      \"exposure\": \"LBXPFNA\",\n      \"exposure_description\": \"Perfluorononanoic acid (PFNA) (ng/mL)\",\n      \"estimate\": -0.03761393312324189,\n      \"p_value\": 0.27959815997276005,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"i_squared\": 0,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFHS\",\n      \"exposure_description\": \"Perfluorohexane sulfonic acid (PFHxS) (ng/mL)\",\n      \"estimate\": -0.014540769147614811,\n      \"p_value\": 0.7083841692015482,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"i_squared\": 0.32694814267155725,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFOA\",\n      \"exposure_description\": \"Perfluorooctanoic acid\",\n      \"estimate\": 0.00790342304388111,\n      \"p_value\": 0.7072240092425776,\n      \"direction\": \"positive\",\n      \"significant\": false,\n      \"i_squared\": 0,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFDE\",\n      \"exposure_description\": \"Perfluorodecanoic acid (PFDeA) (ng/mL)\",\n      \"estimate\": 0.004811836307879144,\n      \"p_value\": 0.8902606686911659,\n      \"direction\": \"positive\",\n      \"significant\": false,\n      \"i_squared\": 0.358095659452841,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFOS\",\n      \"exposure_description\": \"Perfluorooctane sulfonic acid\",\n      \"estimate\": -0.004517487250109848,\n      \"p_value\": 0.864181306417111,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"i_squared\": 0,\n      \"n_cycles\": 2\n    }\n  ]\n}",
+      "ms": 1396
+    },
+    {
+      "name": "exposure_compare",
+      "input": {
+        "exposures": [
+          "LBXPFOA",
+          "LBXPFOS",
+          "LBXPFHS",
+          "LBXPFNA",
+          "LBXPFDE"
+        ],
+        "phenotype": "LBXT3F",
+        "model_number": 6
+      },
+      "output": "{\n  \"phenotype\": \"LBXT3F\",\n  \"phenotype_description\": \"Triiodothyronine (T3), free (pg/mL)\",\n  \"model\": \"age + age² + sex + ethnicity\",\n  \"n_exposures_queried\": 5,\n  \"n_significant\": 0,\n  \"comparison\": [\n    {\n      \"exposure\": \"LBXPFOA\",\n      \"exposure_description\": \"Perfluorooctanoic acid\",\n      \"estimate\": 0.039864664110946794,\n      \"p_value\": 0.42692501398979305,\n      \"direction\": \"positive\",\n      \"significant\": false,\n      \"i_squared\": 0.5981517333248708,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFNA\",\n      \"exposure_description\": \"Perfluorononanoic acid (PFNA) (ng/mL)\",\n      \"estimate\": 0.02745158207301188,\n      \"p_value\": 0.11819165128254833,\n      \"direction\": \"positive\",\n      \"significant\": false,\n      \"i_squared\": 0,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFHS\",\n      \"exposure_description\": \"Perfluorohexane sulfonic acid (PFHxS) (ng/mL)\",\n      \"estimate\": 0.016290872869873695,\n      \"p_value\": 0.7302151891849726,\n      \"direction\": \"positive\",\n      \"significant\": false,\n      \"i_squared\": 0.5568177256710111,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFDE\",\n      \"exposure_description\": \"Perfluorodecanoic acid (PFDeA) (ng/mL)\",\n      \"estimate\": -0.010349815381618882,\n      \"p_value\": 0.3929181252828074,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"i_squared\": 0,\n      \"n_cycles\": 2\n    },\n    {\n      \"exposure\": \"LBXPFOS\",\n      \"exposure_description\": \"Perfluorooctane sulfonic acid\",\n      \"estimate\": -0.01033724907401205,\n      \"p_value\": 0.6309943463584745,\n      \"direction\": \"negative\",\n      \"significant\": false,\n      \"i_squared\": 0,\n      \"n_cycles\": 2\n    }\n  ]\n}",
+      "ms": 1398
+    },
+    {
+      "name": "ctd_chemical_diseases",
+      "input": {
+        "chemical": "PFOA",
+        "disease_filter": "thyroid",
+        "direct_only": true
+      },
+      "output": "{\n  \"chemical\": \"Perfluorooctanoic acid (PFOA)\",\n  \"mesh_ids\": [\n    \"C023036\"\n  ],\n  \"nhanes_vars\": [\n    \"LBXPFOA\",\n    \"LBXNFOA\",\n    \"LBXBFOA\"\n  ],\n  \"total_associations\": 102,\n  \"direct_evidence_count\": 1,\n  \"showing\": 1,\n  \"filter\": {\n    \"direct_only\": true,\n    \"disease_filter\": \"thyroid\"\n  },\n  \"associations\": [\n    {\n      \"mesh_id\": \"C023036\",\n      \"chemical_name\": \"perfluorooctanoic acid\",\n      \"disease_name\": \"Thyroid Diseases\",\n      \"disease_id\": \"MESH:D013959\",\n      \"direct_evidence\": \"marker/mechanism\",\n      \"inference_gene_symbol\": null,\n      \"inference_score\": null,\n      \"pubmed_ids\": \"20089479\"\n    }\n  ],\n  \"note\": \"direct_evidence: 'marker/mechanism' = curated from literature; 'therapeutic' = therapeutic association. Rows without direct_evidence are inferred via shared gene interactions (inference_score = network similarity).\",\n  \"source\": \"Comparative Toxicogenomics Database (CTD), ctdbase.org\"\n}",
+      "ms": 14
+    },
+    {
+      "name": "ctd_chemical_diseases",
+      "input": {
+        "chemical": "PFOS",
+        "disease_filter": "thyroid",
+        "direct_only": true
+      },
+      "output": "{\n  \"chemical\": \"Perfluorooctane sulfonic acid (PFOS)\",\n  \"mesh_ids\": [\n    \"C076994\"\n  ],\n  \"nhanes_vars\": [\n    \"LBXPFOS\",\n    \"LBXNFOS\",\n    \"LBXMFOS\"\n  ],\n  \"total_associations\": 104,\n  \"direct_evidence_count\": 2,\n  \"showing\": 2,\n  \"filter\": {\n    \"direct_only\": true,\n    \"disease_filter\": \"thyroid\"\n  },\n  \"associations\": [\n    {\n      \"mesh_id\": \"C076994\",\n      \"chemical_name\": \"perfluorooctane sulfonic acid\",\n      \"disease_name\": \"Thyroid Diseases\",\n      \"disease_id\": \"MESH:D013959\",\n      \"direct_evidence\": \"marker/mechanism\",\n      \"inference_gene_symbol\": null,\n      \"inference_score\": null,\n      \"pubmed_ids\": \"12773772|20089479\"\n    },\n    {\n      \"mesh_id\": \"C076994\",\n      \"chemical_name\": \"perfluorooctane sulfonic acid\",\n      \"disease_name\": \"Thyroid Neoplasms\",\n      \"disease_id\": \"MESH:D013964\",\n      \"direct_evidence\": \"marker/mechanism\",\n      \"inference_gene_symbol\": null,\n      \"inference_score\": null,\n      \"pubmed_ids\": \"24420840\"\n    }\n  ],\n  \"note\": \"direct_evidence: 'marker/mechanism' = curated from literature; 'therapeutic' = therapeutic association. Rows without direct_evidence are inferred via shared gene interactions (inference_score = network similarity).\",\n  \"source\": \"Comparative Toxicogenomics Database (CTD), ctdbase.org\"\n}",
+      "ms": 6
+    }
+  ],
+  "stop_reason": "end_turn",
+  "input_tokens": 114129,
+  "output_tokens": 4545,
+  "latency_ms": 204301,
+  "iterations": 5,
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(PFAS|PFOA|PFOS)",
+        "matched": true
+      },
+      {
+        "term": "(TSH|T4|T3|thyroid)",
+        "matched": true
+      },
+      {
+        "term": "(null|not significant|no signal|no association)",
+        "matched": true
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "NHANES confirms.*thyroid",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [],
+    "pass": true
+  }
+}

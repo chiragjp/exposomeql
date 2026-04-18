@@ -1,0 +1,33 @@
+{
+  "prompt_id": "quant_bonferroni_threshold",
+  "category": "quantitative",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "I can answer that, but I need the specific EP-WAS catalog/version you’re using (e.g., the web portal or paper/report link). The catalog-wide Bonferroni threshold for “model 6” depends on the exact build (number of exposure–phenotype tests included). Could you share the URL or reference?",
+  "tool_trace": [],
+  "stop_reason": "stop",
+  "input_tokens": 52,
+  "output_tokens": 2515,
+  "latency_ms": 56468,
+  "iterations": 1,
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(3\\.0[012]e-?0?7|3\\.0[012]\\s*[x×]\\s*10\\s*[⁻^-]\\s*[⁷7]|0\\.05\\s*[/÷]\\s*165[,]?342)",
+        "matched": false
+      },
+      {
+        "term": "165[,]?342",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "(approximately|roughly|on the order of|I don'?t have access)",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [],
+    "pass": false
+  }
+}

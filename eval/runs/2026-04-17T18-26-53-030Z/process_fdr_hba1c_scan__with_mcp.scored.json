@@ -1,0 +1,37 @@
+{
+  "prompt_id": "process_fdr_hba1c_scan",
+  "category": "process_multiple_comparisons",
+  "arm": "with_mcp",
+  "model": "gemini-2.5-pro",
+  "final_text": "An exposure-wide scan can take a long time to run. To proceed, please specify which exposure category you'd like to scan. The available categories are:\n\n*   **Metals**: Heavy metals and essential elements.\n*   **Pesticides**: Organochlorine, organophosphate, and pyrethroid pesticides.\n*   **Phytoestrogens**: Plant-derived compounds with estrogenic activity.\n*   **Phenols**: Environmental phenols like BPA and triclosan.\n*   **PAHs**: Polycyclic aromatic hydrocarbons.\n*   **VOCs**: Volatile organic compounds.\n*   **Nutrients**: Dietary and serum nutrients.\n*   **PFAS**: Per- and polyfluoroalkyl substances.\n*   **All**: Run the scan across all available exposures (Note: this may take over 30 minutes).",
+  "tool_trace": [],
+  "stop_reason": "STOP",
+  "input_tokens": 11283,
+  "output_tokens": 177,
+  "latency_ms": 9880,
+  "iterations": 1,
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(BH|benjamini|FDR|q[-\\s]?value|q<0\\.05|scan.specific)",
+        "matched": false
+      },
+      {
+        "term": "(HbA1c|LBXGH|glycohemoglobin)",
+        "matched": false
+      },
+      {
+        "term": "(nominal|raw p|uncorrected)",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "^[^q]*significant.*p\\s*<\\s*0\\.05[^q]*$",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [],
+    "pass": false
+  }
+}

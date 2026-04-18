@@ -1,0 +1,13 @@
+{
+  "prompt_id": "quant_pfoa_cycles_count",
+  "category": "quantitative",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "9",
+  "tool_trace": [],
+  "stop_reason": "stop",
+  "input_tokens": 37,
+  "output_tokens": 2442,
+  "latency_ms": 26520,
+  "iterations": 1
+}

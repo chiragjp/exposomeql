@@ -1,0 +1,13 @@
+{
+  "prompt_id": "hallucination_fake_pfas_thyroid_claim",
+  "category": "hallucination_bait",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "length",
+  "input_tokens": 54,
+  "output_tokens": 4096,
+  "latency_ms": 68706,
+  "iterations": 1
+}

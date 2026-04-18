@@ -7,7 +7,76 @@ import type { AppContext, ResolveResult, CohortConfig } from "../types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-import { MODEL_DESCRIPTIONS, CYCLE_TO_SERIES, SERIES_MAP } from "../types.js";
+import { MODEL_DESCRIPTIONS, CYCLE_TO_SERIES, SERIES_MAP, EPWAS_MULTIPLE_TESTING } from "../types.js";
+import { benjaminiHochberg } from "../guardrails/multiple-testing.js";
+
+/** Annotate each EP-WAS result row with a survives_bonferroni flag (uses the
+ *  catalog-wide threshold; not scan-specific). */
+function annotateMultipleTesting<T extends Record<string, unknown>>(rows: T[]): (T & { survives_bonferroni: boolean })[] {
+  return rows.map((r) => {
+    const p = r.p_value;
+    return {
+      ...r,
+      survives_bonferroni: typeof p === "number" && p < EPWAS_MULTIPLE_TESTING.bonferroni_threshold,
+    };
+  });
+}
+
+/** Compute Benjamini-Hochberg q-values across an entire scan (e.g. all
+ *  phenotypes for one exposure) and annotate each row with q_value +
+ *  survives_fdr_05 + survives_bonferroni. Also returns the largest raw p-value
+ *  whose q-value is < 0.05 — i.e. the scan-specific FDR threshold. */
+function annotateScanBHFDR<T extends Record<string, unknown>>(
+  rows: T[]
+): {
+  rows: (T & { q_value: number | null; survives_fdr_05: boolean; survives_bonferroni: boolean })[];
+  fdr_threshold_5pct: number | null;
+  n_survives_fdr_05: number;
+} {
+  const pValues = rows.map((r) => (typeof r.p_value === "number" ? r.p_value : NaN));
+  const valid = pValues.filter((p) => Number.isFinite(p));
+  if (valid.length === 0) {
+    return {
+      rows: rows.map((r) => ({ ...r, q_value: null, survives_fdr_05: false, survives_bonferroni: false })),
+      fdr_threshold_5pct: null,
+      n_survives_fdr_05: 0,
+    };
+  }
+  const qValuesValid = benjaminiHochberg(valid);
+  // Re-thread q-values back to original positions (handle NaN holes).
+  const qValues: (number | null)[] = [];
+  let vi = 0;
+  for (const p of pValues) {
+    if (Number.isFinite(p)) {
+      qValues.push(qValuesValid[vi++]);
+    } else {
+      qValues.push(null);
+    }
+  }
+  // Scan-specific FDR threshold = largest raw p whose q < 0.05.
+  let fdrThresh: number | null = null;
+  for (let i = 0; i < pValues.length; i++) {
+    const q = qValues[i];
+    const p = pValues[i];
+    if (q !== null && q < 0.05 && Number.isFinite(p)) {
+      if (fdrThresh === null || p > fdrThresh) fdrThresh = p;
+    }
+  }
+  let nSig = 0;
+  const annotated = rows.map((r, i) => {
+    const q = qValues[i];
+    const p = typeof r.p_value === "number" ? r.p_value : null;
+    const passFdr = q !== null && q < 0.05;
+    if (passFdr) nSig++;
+    return {
+      ...r,
+      q_value: q,
+      survives_fdr_05: passFdr,
+      survives_bonferroni: p !== null && p < EPWAS_MULTIPLE_TESTING.bonferroni_threshold,
+    };
+  });
+  return { rows: annotated, fdr_threshold_5pct: fdrThresh, n_survives_fdr_05: nSig };
+}
 import { formatCellSizeWarning } from "../guardrails/cell-size.js";
 import { checkLOD, isLabBiomarker } from "../guardrails/lod-handling.js";
 import { generateMeanCode, generateConditionalCode } from "../codegen/r-code-generator.js";
@@ -919,9 +988,11 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
                 {
                   query: { exposure: exposureVar, phenotype: phenotypeVar },
                   model: MODEL_DESCRIPTIONS[model_number ?? 6],
+                  multiple_testing: EPWAS_MULTIPLE_TESTING,
                   n_results: enriched.length,
-                  results: enriched,
-                  note: "Effect sizes are from survey-weighted linear regression with exposure log10-transformed and z-scored. P-values are nominal — apply Bonferroni or FDR for multiple comparisons.",
+                  n_survives_bonferroni: annotateMultipleTesting(enriched).filter((r) => r.survives_bonferroni).length,
+                  results: annotateMultipleTesting(enriched),
+                  note: "Effect sizes are from survey-weighted linear regression with exposure log10-transformed and z-scored. P-values are nominal; see multiple_testing for the Bonferroni threshold and survives_bonferroni per row.",
                 },
                 null,
                 2
@@ -969,6 +1040,8 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
         };
       }
       try {
+        // Pull the FULL scan (one exposure × all phenotypes) so we can compute
+        // BH-FDR over the actual scan space, then slice top_n by |estimate|.
         const sql = `
           SELECT evarname as exposure, pvarname as phenotype,
             "estimate.uwls" as estimate, "std.error.uwls" as std_error,
@@ -979,13 +1052,14 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
             AND evarname = $1
             AND CAST(model_number AS INTEGER) = $2
           ORDER BY ABS("estimate.uwls") DESC
-          LIMIT $3
         `;
-        const results = await ctx.db.query(sql, r.variable!.variableName, model_number ?? 6, top_n ?? 30);
-        const enriched = results.map((row: Record<string, unknown>) => {
+        const fullResults = await ctx.db.query(sql, r.variable!.variableName, model_number ?? 6);
+        const enrichedFull = fullResults.map((row: Record<string, unknown>) => {
           const pVar = ctx.resolver.get(row.phenotype as string);
           return { ...row, phenotype_description: pVar?.description ?? "Unknown" };
         });
+        const bh = annotateScanBHFDR(enrichedFull);
+        const topN = bh.rows.slice(0, top_n ?? 30);
         return {
           content: [
             {
@@ -995,8 +1069,16 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
                   exposure: r.variable!.variableName,
                   exposure_description: r.variable!.description,
                   model: MODEL_DESCRIPTIONS[model_number ?? 6],
-                  n_results: enriched.length,
-                  results: enriched,
+                  multiple_testing: {
+                    ...EPWAS_MULTIPLE_TESTING,
+                    scan_n_tests: enrichedFull.length,
+                    fdr_threshold_5pct: bh.fdr_threshold_5pct,
+                    fdr_note: "scan-specific BH-FDR computed across all phenotypes for this exposure",
+                  },
+                  n_results: topN.length,
+                  n_survives_bonferroni: bh.rows.filter((r) => r.survives_bonferroni).length,
+                  n_survives_fdr_05: bh.n_survives_fdr_05,
+                  results: topN,
                 },
                 null,
                 2
@@ -1041,6 +1123,7 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
         };
       }
       try {
+        // Pull the FULL scan (one phenotype × all exposures) for scan-specific BH-FDR.
         const sql = `
           SELECT evarname as exposure, pvarname as phenotype,
             "estimate.uwls" as estimate, "std.error.uwls" as std_error,
@@ -1051,13 +1134,14 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
             AND pvarname = $1
             AND CAST(model_number AS INTEGER) = $2
           ORDER BY ABS("estimate.uwls") DESC
-          LIMIT $3
         `;
-        const results = await ctx.db.query(sql, r.variable!.variableName, model_number ?? 6, top_n ?? 30);
-        const enriched = results.map((row: Record<string, unknown>) => {
+        const fullResults = await ctx.db.query(sql, r.variable!.variableName, model_number ?? 6);
+        const enrichedFull = fullResults.map((row: Record<string, unknown>) => {
           const eVar = ctx.resolver.get(row.exposure as string);
           return { ...row, exposure_description: eVar?.description ?? "Unknown" };
         });
+        const bh = annotateScanBHFDR(enrichedFull);
+        const topN = bh.rows.slice(0, top_n ?? 30);
         return {
           content: [
             {
@@ -1067,8 +1151,16 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
                   phenotype: r.variable!.variableName,
                   phenotype_description: r.variable!.description,
                   model: MODEL_DESCRIPTIONS[model_number ?? 6],
-                  n_results: enriched.length,
-                  results: enriched,
+                  multiple_testing: {
+                    ...EPWAS_MULTIPLE_TESTING,
+                    scan_n_tests: enrichedFull.length,
+                    fdr_threshold_5pct: bh.fdr_threshold_5pct,
+                    fdr_note: "scan-specific BH-FDR computed across all exposures for this phenotype",
+                  },
+                  n_results: topN.length,
+                  n_survives_bonferroni: bh.rows.filter((r) => r.survives_bonferroni).length,
+                  n_survives_fdr_05: bh.n_survives_fdr_05,
+                  results: topN,
                 },
                 null,
                 2
@@ -5218,6 +5310,215 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
         } catch (err) {
           return { content: [{ type: "text" as const, text: `Error computing trend: ${(err as Error).message}` }] };
         }
+      }
+    }
+  );
+
+  // ── Tool: exposure_correlation_matrix ──
+
+  server.tool(
+    "exposure_correlation_matrix",
+    "Build a pairwise exposure-exposure correlation matrix among a set of exposures. Three modes: (A) pass an explicit list of exposures; (B) anchor by a phenotype — auto-pick the top-N exposures associated with that phenotype, then return correlations among them; (C) anchor by an index exposure — find all exposures with |r| > threshold to the index, then return correlations among that set. Source: ee_stats.adjusted_meta (NHANES exposure-exposure pairwise estimates). Output is long-form edges sorted by |r|; client can pivot to a matrix or render as heatmap/network/globe.",
+    {
+      exposures: z.array(z.string()).optional()
+        .describe("Mode A: explicit list of exposure variable names (>=2)."),
+      phenotype_anchor: z.object({
+        phenotype: z.string(),
+        top_n: z.number().optional().default(20),
+      }).optional()
+        .describe("Mode B: anchor by a phenotype. Picks the top-N exposures associated with this phenotype (by |estimate| in pe_stats.adjusted_meta_uwls model 6) and returns correlations among them."),
+      index_exposure: z.object({
+        exposure: z.string(),
+        anchor_threshold: z.number().optional().default(0.25),
+        max_n: z.number().optional().default(40),
+      }).optional()
+        .describe("Mode C: anchor by an index exposure. Finds up to max_n exposures with |r| > anchor_threshold to the index, then returns correlations among that set (including the index itself)."),
+      threshold: z.number().optional().default(0.25)
+        .describe("Filter edges by |r| > threshold. Default 0.25 matches the exposome globe paper."),
+      require_significance: z.boolean().optional().default(true)
+        .describe("Drop pairs that don't survive Bonferroni correction within the returned set."),
+      model_number: z.number().optional().default(1)
+        .describe("ee_stats model_number (1 = unadjusted/raw correlation, default)."),
+    },
+    async ({ exposures, phenotype_anchor, index_exposure, threshold, require_significance, model_number }) => {
+      const thr = threshold ?? 0.25;
+      const reqSig = require_significance ?? true;
+      const modelN = model_number ?? 1;
+
+      const modeCount = [exposures, phenotype_anchor, index_exposure].filter((x) => x).length;
+      if (modeCount === 0) {
+        return { content: [{ type: "text" as const, text: "Specify exactly one of: exposures, phenotype_anchor, or index_exposure." }] };
+      }
+      if (modeCount > 1) {
+        return { content: [{ type: "text" as const, text: "Specify only one mode at a time." }] };
+      }
+
+      try {
+        // ── 1. Resolve the anchor exposure set ─────────────────────────────
+        let anchorVars: string[] = [];
+        let mode: "explicit" | "phenotype_anchor" | "index_exposure" = "explicit";
+
+        if (exposures) {
+          mode = "explicit";
+          for (const e of exposures) {
+            const r = await ctx.resolver.resolve(e);
+            if (!r.resolved) {
+              return { content: [{ type: "text" as const, text: `Exposure "${e}" not found or ambiguous.` }] };
+            }
+            anchorVars.push(r.variable!.variableName);
+          }
+        } else if (phenotype_anchor) {
+          mode = "phenotype_anchor";
+          const r = await ctx.resolver.resolve(phenotype_anchor.phenotype);
+          if (!r.resolved) {
+            return { content: [{ type: "text" as const, text: `Phenotype "${phenotype_anchor.phenotype}" not found or ambiguous.` }] };
+          }
+          const pickRows = await ctx.db.query(
+            `SELECT evarname FROM pe_stats.adjusted_meta_uwls
+             WHERE expo_name='expo' AND pvarname=$1 AND CAST(model_number AS INTEGER)=6
+             ORDER BY ABS("estimate.uwls") DESC LIMIT $2`,
+            r.variable!.variableName, phenotype_anchor.top_n ?? 20
+          );
+          anchorVars = pickRows.map((row: Record<string, unknown>) => row.evarname as string);
+        } else if (index_exposure) {
+          mode = "index_exposure";
+          const r = await ctx.resolver.resolve(index_exposure.exposure);
+          if (!r.resolved) {
+            return { content: [{ type: "text" as const, text: `Index exposure "${index_exposure.exposure}" not found or ambiguous.` }] };
+          }
+          const idxVar = r.variable!.variableName;
+          const aThr = index_exposure.anchor_threshold ?? 0.25;
+          const maxN = index_exposure.max_n ?? 40;
+          // Find correlated exposures (either xvarname or yvarname slot).
+          const corrRows = await ctx.db.query(
+            `SELECT CASE WHEN xvarname=$1 THEN yvarname ELSE xvarname END AS partner,
+                    estimate, "p.value" AS p_value
+             FROM ee_stats.adjusted_meta
+             WHERE (xvarname=$1 OR yvarname=$1)
+               AND CAST(model_number AS INTEGER)=$2
+               AND term = 'overall'
+               AND xvarname != yvarname
+             ORDER BY ABS(estimate) DESC`,
+            idxVar, modelN
+          );
+          const seen = new Set<string>([idxVar]);
+          for (const row of corrRows as Record<string, unknown>[]) {
+            const partner = row.partner as string;
+            const est = row.estimate as number;
+            const clipped = Math.max(-1, Math.min(1, est));
+            if (Math.abs(clipped) > aThr && !seen.has(partner)) {
+              seen.add(partner);
+              if (seen.size > maxN) break;
+            }
+          }
+          anchorVars = [...seen];
+        }
+
+        if (anchorVars.length < 2) {
+          return { content: [{ type: "text" as const, text: `Need at least 2 anchor exposures; got ${anchorVars.length}. Try lowering anchor_threshold or increasing top_n/max_n.` }] };
+        }
+
+        // ── 2. Pull pairwise correlations among the anchor set ─────────────
+        // Dedupe undirected pairs via pmin/pmax pattern in SQL (LEAST/GREATEST).
+        // Build two distinct parameter ranges so DuckDB doesn't think we under-
+        // bound positional params.
+        const xPlaceholders = anchorVars.map((_, i) => `$${i + 2}`).join(",");
+        const yPlaceholders = anchorVars.map((_, i) => `$${i + 2 + anchorVars.length}`).join(",");
+        const sql = `
+          SELECT LEAST(xvarname, yvarname)    AS x,
+                 GREATEST(xvarname, yvarname) AS y,
+                 AVG(estimate)                AS estimate,
+                 MEDIAN("p.value")            AS p_value,
+                 MAX(nobs)                    AS n_obs
+          FROM ee_stats.adjusted_meta
+          WHERE CAST(model_number AS INTEGER) = $1
+            AND term = 'overall'
+            AND xvarname != yvarname
+            AND xvarname IN (${xPlaceholders})
+            AND yvarname IN (${yPlaceholders})
+          GROUP BY x, y
+          ORDER BY ABS(AVG(estimate)) DESC
+        `;
+        const params = [modelN, ...anchorVars, ...anchorVars];
+        const pairRows = (await ctx.db.query(sql, ...params)) as Record<string, unknown>[];
+
+        // Bonferroni threshold within the returned scan.
+        const nPairs = pairRows.length;
+        const bonfWithin = nPairs > 0 ? 0.05 / nPairs : 1;
+
+        const edges = pairRows
+          .map((row) => {
+            const est = row.estimate as number;
+            const clipped = Math.max(-1, Math.min(1, est));
+            return { row, est, clipped };
+          })
+          .filter(({ row, clipped }) => {
+            const p = row.p_value as number | null;
+            if (!Number.isFinite(clipped) || Math.abs(clipped) <= thr) return false;
+            if (reqSig && (p === null || !Number.isFinite(p) || p > bonfWithin)) return false;
+            return true;
+          })
+          .map(({ row, est, clipped }) => {
+            const x = row.x as string;
+            const y = row.y as string;
+            const xVar = ctx.resolver.get(x);
+            const yVar = ctx.resolver.get(y);
+            return {
+              x,
+              y,
+              x_description: xVar?.description ?? "Unknown",
+              y_description: yVar?.description ?? "Unknown",
+              estimate: Number(clipped.toFixed(4)),
+              estimate_raw: Number(est.toFixed(4)),
+              abs_estimate: Number(Math.abs(clipped).toFixed(4)),
+              sign: clipped > 0 ? "positive" : "negative",
+              p_value: row.p_value as number | null,
+              n_obs: row.n_obs as number | null,
+            };
+          });
+
+        const positives = edges.filter((e) => e.estimate > 0).length;
+        const meanR = edges.length === 0 ? 0 : edges.reduce((a, b) => a + b.estimate, 0) / edges.length;
+        const medianAbs = edges.length === 0 ? 0
+          : [...edges.map((e) => e.abs_estimate)].sort((a, b) => a - b)[Math.floor(edges.length / 2)];
+
+        // Build node list (only nodes that appear in edges)
+        const nodeSet = new Set<string>();
+        for (const e of edges) { nodeSet.add(e.x); nodeSet.add(e.y); }
+        const nodes = [...nodeSet].map((id) => {
+          const v = ctx.resolver.get(id);
+          return { id, description: v?.description ?? "Unknown" };
+        });
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              mode,
+              anchor_exposures: anchorVars,
+              n_anchor: anchorVars.length,
+              filters: {
+                edge_threshold: thr,
+                require_bonferroni_within_scan: reqSig,
+                bonferroni_threshold: reqSig ? bonfWithin : null,
+                model_number: modelN,
+              },
+              n_edges: edges.length,
+              n_nodes_in_edges: nodes.length,
+              summary: {
+                mean_r: Number(meanR.toFixed(4)),
+                median_abs_r: Number(medianAbs.toFixed(4)),
+                n_positive: positives,
+                n_negative: edges.length - positives,
+              },
+              nodes,
+              edges,
+              note: "Pairwise exposure-exposure associations from ee_stats.adjusted_meta (one log10/z-scored exposure regressed on another, model_number=1 = unadjusted). Edges are undirected (deduped via LEAST/GREATEST). 'estimate' is clipped to [-1, 1] for thresholding (matches the exposome-globe paper); 'estimate_raw' preserves the underlying regression coefficient. Pivot edges to a matrix downstream; or render as a circular network ('exposome globe') / heatmap.",
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error building correlation matrix: ${(err as Error).message}` }] };
       }
     }
   );

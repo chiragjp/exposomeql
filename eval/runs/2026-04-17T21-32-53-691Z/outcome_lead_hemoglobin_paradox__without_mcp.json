@@ -1,0 +1,13 @@
+{
+  "prompt_id": "outcome_lead_hemoglobin_paradox",
+  "category": "outcome",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "Short answer\n- Crude (unadjusted) NHANES data: the correlation is near-zero to slightly positive.\n- After adjusting for key confounders (especially age, sex, smoking, and iron status): the association is inverse—higher blood lead is associated with lower hemoglobin.\n\nWhy this happens\n- Biology: Lead inhibits heme synthesis (ALA dehydratase and ferrochelatase), so within comparable groups you see lower hemoglobin with higher lead.\n- Confounding in NHANES: Groups with naturally higher hemoglobin (adult men, smokers) also tend to have higher blood lead, which can flip the overall, unstratified correlation to weakly positive (a Simpson’s paradox pattern).\n- At today’s low U.S. exposure levels, the direct heme-synthesis effect on hemoglobin is modest and easily masked by demographic and behavioral determinants of hemoglobin unless you adjust for them; once you do, the expected inverse relationship appears, particularly in children and iron-deficient individuals.",
+  "tool_trace": [],
+  "stop_reason": "stop",
+  "input_tokens": 40,
+  "output_tokens": 2391,
+  "latency_ms": 45158,
+  "iterations": 1
+}

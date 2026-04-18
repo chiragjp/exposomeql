@@ -1,0 +1,17 @@
+id: quant_pfoa_cycles_count
+category: quantitative
+prompt: |
+  In how many NHANES cycles was PFOA (LBXPFOA) measured? Give an exact integer
+  — no ranges or approximations.
+expected:
+  answer: 5
+  reasoning: PFOA/PFOS were discontinued after cycle G (2011-2012). Cycles C-G = 5.
+deterministic_checks:
+  required_terms:
+    - "\\b5(\\s+cycles)?\\b"
+    - "(PFOA|LBXPFOA)"
+  forbidden_terms:
+    - "(approximately|roughly|around|about|on the order of|many|several)"
+rubric:
+  - answers_exact_integer
+  - does_not_hedge

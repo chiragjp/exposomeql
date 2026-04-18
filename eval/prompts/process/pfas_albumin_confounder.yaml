@@ -1,0 +1,27 @@
+id: process_pfas_albumin_confounder
+category: process_confounding
+prompt: |
+  In NHANES, PFAS exposures are associated with paradoxical *protective* metabolic profiles —
+  lower glucose, lower BMI, higher cholesterol, lower CRP. What is the most likely explanation,
+  and what evidence would resolve it?
+expected:
+  required_concept: pharmacokinetic_confounding_via_albumin_binding
+  mechanism: ">99.7% of PFAS is protein-bound; healthier participants with higher albumin carry more PFAS"
+required_tools:
+  - "epwas_search|epwas_summary"
+  - "confounder_check"
+deterministic_checks:
+  required_terms:
+    # Canonical mechanism is albumin binding, but accept any coherent
+    # confounder/artifact story (reverse causation, selection, secular trend,
+    # disease-driven behavior). Regex below is a union so the model gets
+    # credit for any plausible resolution of the PFAS paradox.
+    - "(albumin|protein.bind|binding|pharmacokinet|reverse caus|healthy (participant|volunteer)|selection|disease.driven|secular|simpson|artifact|spurious|not causal)"
+    - "(paradox|protective|inverse|lower|negative association)"
+  forbidden_terms:
+    - "PFAS protect against"
+    - "PFAS reduce(s)? risk of"
+rubric:
+  - identifies_albumin_binding_confounder
+  - calls_confounder_check_tool
+  - distinguishes_signal_from_artifact

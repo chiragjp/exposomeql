@@ -1,0 +1,33 @@
+{
+  "prompt_id": "outcome_cadmium_uric_null",
+  "category": "outcome",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 118,
+  "iterations": 1,
+  "error": "400 Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(cadmium|LBXBCD)",
+        "matched": false
+      },
+      {
+        "term": "(uric acid|LBXSUA)",
+        "matched": false
+      },
+      {
+        "term": "(null|not (significant|robust)|non[- ]significant|weakens?|attenuat|p[-\\s]*(value)?[:=\\s]*0\\.1|no (association|effect)|opposite direction|discorda)",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [],
+    "required_tools_called": [],
+    "pass": false
+  }
+}

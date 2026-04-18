@@ -1,0 +1,20 @@
+id: outcome_lead_hemoglobin_paradox
+category: outcome
+prompt: |
+  In NHANES, does blood lead correlate with hemoglobin? Report the direction and explain it,
+  given that lead is biochemically known to inhibit heme synthesis.
+expected:
+  direction_in_data: positive
+  expected_direction_from_biology: negative
+  resolution: healthy_participant_or_reverse_causation_signature
+deterministic_checks:
+  required_terms:
+    - "(lead|LBXBPB)"
+    - "(hemoglobin|LBXHGB)"
+    - "(reverse|healthy|selection|confound)"
+  forbidden_terms:
+    - "lead causes higher hemoglobin"
+rubric:
+  - flags_direction_mismatch_with_biology
+  - proposes_confounding_or_selection_explanation
+  - does_not_assert_causation

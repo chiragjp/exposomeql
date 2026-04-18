@@ -1,0 +1,22 @@
+id: process_vitd_recall_vs_biomarker
+category: process_confounding
+prompt: |
+  In NHANES, dietary vitamin D intake (DR1TVD) is associated with *higher* systolic blood
+  pressure (β=+0.04, p=0.002), but serum 25-OH vitamin D (LBDVIDMS) is associated with *lower*
+  SBP (β=−0.87, p=7e-5). RCTs show vitamin D lowers SBP by ~3.8 mmHg. Which exposure proxy
+  should we trust and why?
+expected:
+  trustworthy_proxy: serum_biomarker
+  reason: dietary_recall_misclassifies_and_correlates_with_overall_diet_quality
+required_tools:
+  - "(nutrient_biomarker_vs_dietary|nutrient_triangulate)"
+deterministic_checks:
+  required_terms:
+    - "(serum|biomarker|LBDVIDMS|25.OH)"
+    - "(recall|DR1T|misclass|measurement error)"
+    - "(triangulat|RCT|experimental)"
+  forbidden_terms: []
+rubric:
+  - prefers_biomarker_over_recall_with_reason
+  - cites_rct_concordance
+  - calls_appropriate_triangulation_tool

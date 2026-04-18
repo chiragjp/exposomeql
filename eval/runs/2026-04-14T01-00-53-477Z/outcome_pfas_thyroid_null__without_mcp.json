@@ -1,0 +1,13 @@
+{
+  "prompt_id": "outcome_pfas_thyroid_null",
+  "category": "outcome",
+  "arm": "without_mcp",
+  "model": "claude-haiku-4-5-20251001",
+  "final_text": "# NHANES Evidence on PFAS and Thyroid Function\n\nThe evidence is **mixed and limited**:\n\n## What NHANES Actually Shows\n\n**TSH findings:**\n- Most NHANES analyses find **no significant association** between PFAS exposure and TSH levels in the general adult population\n- Relationships are inconsistent across different PFAS compounds (PFOA, PFOS, PFHxS)\n- When associations appear, effect sizes are generally small\n\n**T4 findings:**\n- Some studies report **weak inverse associations** between certain PFAS (particularly PFOA) and total T4\n- Associations are not consistently replicated across different NHANES cycles or populations\n- Clinical significance is unclear\n\n**T3 findings:**\n- **Very limited NHANES data** specifically examining T3\n- This is a notable gap given ATSDR's concern listing\n\n## Critical Context\n\nThe disconnect between ATSDR listing and NHANES data likely reflects:\n- ATSDR's concern based on **occupational/high-exposure studies** and **animal data**, not general population evidence\n- NHANES examines **typical background PFAS levels**, which may be below thresholds where thyroid effects appear\n- **Confounding variables** (iodine status, age, sex, obesity) complicate interpretation\n- Most studies focus on TSH only, potentially missing subclinical effects\n\n## Bottom Line\n\nNHANES does **not provide robust support** for thyroid effects at population-level PFAS exposures, though it doesn't rule out effects at higher exposures.",
+  "tool_trace": [],
+  "stop_reason": "end_turn",
+  "input_tokens": 51,
+  "output_tokens": 354,
+  "latency_ms": 19924,
+  "iterations": 1
+}

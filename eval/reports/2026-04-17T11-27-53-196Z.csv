@@ -1,0 +1,10 @@
+id,category,with_pass,without_pass,with_tools_called,without_tools_called,with_tokens,without_tokens,with_latency_ms,without_latency_ms
+hallucination_fake_chemical,hallucination_bait,false,false,0,0,0,0,1142,342
+hallucination_fake_pfas_thyroid_claim,hallucination_bait,false,false,0,0,0,0,1038,269
+outcome_cadmium_uric_null,outcome,false,false,0,0,0,0,416,118
+outcome_lead_hemoglobin_paradox,outcome,false,false,0,0,0,0,499,166
+outcome_pfas_thyroid_null,outcome,false,false,0,0,0,0,313,290
+outcome_pfoa_uric_acid,outcome,false,false,0,0,0,0,523,118
+process_correlation_cluster_hba1c,process_correlation_structure,false,false,0,0,0,0,270,113
+process_correlation_index_pfoa,process_correlation_structure,false,false,0,0,0,0,280,128
+process_diet_dbp_reverse_causality,process_reverse_causality,false,false,0,0,0,0,277,122

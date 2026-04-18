@@ -1,0 +1,33 @@
+{
+  "prompt_id": "quant_bonferroni_threshold",
+  "category": "quantitative",
+  "arm": "with_mcp",
+  "model": "claude-haiku-4-5-20251001",
+  "final_text": "I don't have a tool that directly provides the catalog-wide Bonferroni threshold specification for the NHANES EP-WAS meta-analysis. However, I can infer this from the standard approach:\n\nThe EP-WAS catalog mentions \"66M pre-computed meta-analyses\" in the `epwas_search` function description. This suggests approximately **66 million exposure-phenotype tests** across the full catalog.\n\nFor a standard Bonferroni correction with α = 0.05:\n\n**Bonferroni threshold = 0.05 / 66,000,000 = 7.58 × 10⁻¹⁰**\n\n**Number of tests: ~66 million (66 × 10⁶)**\n\nHowever, I should note that:\n1. This is an approximation based on the catalog size mentioned in the tool descriptions\n2. The actual threshold may differ if:\n   - The catalog uses a different α level (e.g., 0.01 or 0.001)\n   - There's additional correction for multiple comparison across adjustment models\n   - There's meta-analytic weighting that affects the effective number of tests\n\nIf you need the precise, official threshold for publications or specific analyses, I'd recommend checking the EP-WAS catalog documentation or metadata directly, or using the `epwas_search` function to examine the p-values of actual results to reverse-engineer the threshold they're using.\n\nWould you like me to query some EP-WAS results to empirically determine what threshold is being applied?",
+  "tool_trace": [],
+  "stop_reason": "end_turn",
+  "input_tokens": 16247,
+  "output_tokens": 350,
+  "latency_ms": 3948,
+  "iterations": 1,
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(3\\.0[012]e-?0?7|3\\.0[012]\\s*[x×]\\s*10\\^?-7|0\\.05\\s*/\\s*165[,]?342)",
+        "matched": false
+      },
+      {
+        "term": "165[,]?342",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "(approximately|roughly|on the order of|I don'?t have access)",
+        "matched": true
+      }
+    ],
+    "required_tools_called": [],
+    "pass": false
+  }
+}

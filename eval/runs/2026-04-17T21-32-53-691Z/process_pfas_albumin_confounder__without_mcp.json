@@ -1,0 +1,13 @@
+{
+  "prompt_id": "process_pfas_albumin_confounder",
+  "category": "process_confounding",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "length",
+  "input_tokens": 53,
+  "output_tokens": 4096,
+  "latency_ms": 70213,
+  "iterations": 1
+}

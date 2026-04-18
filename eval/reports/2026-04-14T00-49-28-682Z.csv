@@ -1,0 +1,2 @@
+id,category,with_pass,without_pass,with_tools_called,without_tools_called,with_tokens,without_tokens,with_latency_ms,without_latency_ms
+outcome_pfoa_uric_acid,outcome,true,false,5,0,67970,402,14487,10296

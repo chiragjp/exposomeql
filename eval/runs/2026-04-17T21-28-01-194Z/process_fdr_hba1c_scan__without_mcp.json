@@ -1,0 +1,14 @@
+{
+  "prompt_id": "process_fdr_hba1c_scan",
+  "category": "process_multiple_comparisons",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "unknown",
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "latency_ms": 150,
+  "iterations": 1,
+  "error": "401 Incorrect API key provided: sk-ant-a************************************************************************************************DgAA. You can find your API key at https://platform.openai.com/account/api-keys."
+}

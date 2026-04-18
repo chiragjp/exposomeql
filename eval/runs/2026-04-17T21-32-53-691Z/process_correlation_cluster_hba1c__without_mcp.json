@@ -1,0 +1,13 @@
+{
+  "prompt_id": "process_correlation_cluster_hba1c",
+  "category": "process_correlation_structure",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "",
+  "tool_trace": [],
+  "stop_reason": "length",
+  "input_tokens": 56,
+  "output_tokens": 4096,
+  "latency_ms": 50356,
+  "iterations": 1
+}

@@ -1,0 +1,20 @@
+id: process_correlation_index_pfoa
+category: process_correlation_structure
+prompt: |
+  Zoom in on PFOA (LBXPFOA) as an index exposure. Which other environmental
+  exposures in NHANES are most correlated with it? Are the correlations
+  dominated by other PFAS compounds (as you'd expect from shared sources), or
+  by something else?
+expected:
+  required_family: other_PFAS_compounds
+required_tools:
+  - "exposure_correlation_matrix"
+deterministic_checks:
+  required_terms:
+    - "(PFAS|PFOS|PFHxS|PFNA|perfluor|LBXPFOS|LBXPFHS|LBXPFNA|LBXPFBS)"
+    - "(correlat|relat|cluster|co.occur)"
+    - "(PFOA|LBXPFOA)"
+rubric:
+  - identifies_other_PFAS_cluster
+  - uses_correlation_matrix_tool_mode_C
+  - interprets_shared_exposure_sources

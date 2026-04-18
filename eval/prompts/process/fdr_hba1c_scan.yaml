@@ -1,0 +1,22 @@
+id: process_fdr_hba1c_scan
+category: process_multiple_comparisons
+prompt: |
+  Run an exposure-wide scan against glycohemoglobin (HbA1c / LBXGH) in NHANES.
+  Report how many exposures survive scan-specific BH-FDR at q<0.05, and
+  contrast that with the count at nominal p<0.05. Name a few exposures that
+  survive FDR.
+expected:
+  required_concept: scan_specific_bh_fdr
+required_tools:
+  - "epwas_phenotype_profile|epwas_search|epwas_summary"
+deterministic_checks:
+  required_terms:
+    - "(BH|benjamini|FDR|q[-\\s]?value|q<0\\.05|scan.specific)"
+    - "(HbA1c|LBXGH|glycohemoglobin)"
+    - "(nominal|raw p|uncorrected)"
+  forbidden_terms:
+    - "^[^q]*significant.*p\\s*<\\s*0\\.05[^q]*$"
+rubric:
+  - reports_fdr_count_not_just_nominal
+  - distinguishes_scan_specific_from_catalog_wide
+  - names_surviving_exposures

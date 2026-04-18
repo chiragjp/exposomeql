@@ -1,0 +1,19 @@
+id: quant_bonferroni_threshold
+category: quantitative
+prompt: |
+  What is the catalog-wide Bonferroni threshold for the NHANES EP-WAS
+  meta-analysis at model 6? Give the numeric threshold (scientific notation
+  acceptable) and the number of tests it corresponds to.
+expected:
+  threshold: 3.02e-7
+  n_tests: 165342
+deterministic_checks:
+  required_terms:
+    - "(3\\.0[012]e-?0?7|3\\.0[012]\\s*[x×]\\s*10\\s*[⁻^-]\\s*[⁷7]|0\\.05\\s*[/÷]\\s*165[,]?342)"
+    - "165[,]?342"
+  forbidden_terms:
+    - "(approximately|roughly|on the order of|I don'?t have access)"
+rubric:
+  - reports_exact_threshold
+  - reports_exact_test_count
+  - does_not_hedge

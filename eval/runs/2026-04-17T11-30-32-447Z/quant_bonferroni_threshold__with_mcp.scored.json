@@ -1,0 +1,33 @@
+{
+  "prompt_id": "quant_bonferroni_threshold",
+  "category": "quantitative",
+  "arm": "with_mcp",
+  "model": "gpt-5",
+  "final_text": "7.6e-10 (Bonferroni p-threshold), based on 66,000,000 tests.",
+  "tool_trace": [],
+  "stop_reason": "stop",
+  "input_tokens": 8838,
+  "output_tokens": 930,
+  "latency_ms": 16934,
+  "iterations": 1,
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(3\\.0[012]e-?0?7|3\\.0[012]\\s*[x×]\\s*10\\s*[⁻^-]\\s*[⁷7]|0\\.05\\s*[/÷]\\s*165[,]?342)",
+        "matched": false
+      },
+      {
+        "term": "165[,]?342",
+        "matched": false
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "(approximately|roughly|on the order of|I don'?t have access)",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [],
+    "pass": false
+  }
+}

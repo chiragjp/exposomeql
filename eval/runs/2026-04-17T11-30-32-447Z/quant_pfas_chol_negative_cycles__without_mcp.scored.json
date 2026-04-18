@@ -1,0 +1,41 @@
+{
+  "prompt_id": "quant_pfas_chol_negative_cycles",
+  "category": "quantitative",
+  "arm": "without_mcp",
+  "model": "gpt-5",
+  "final_text": "I can list them, but I need your exact definition of “within-cycle association.” Please confirm:\n- Model: unadjusted (LBXTC ~ LBXPFOA) or adjusted (which covariates)?\n- Scale: raw vs log-transformed (e.g., log2 PFOA)?\n- Survey design: use NHANES weights/PSU/strata?\n- Sample: adults ≥20 only? Fasting status?\n- Cycles to include: all cycles where LBXPFOA is available?\n\nIf you’re okay with a default (survey-weighted, unadjusted linear regression of LBXTC on LBXPFOA among adults ≥20, complete cases, by cycle), say “use default,” and I’ll give the exact cycle letters/years with negative slopes.",
+  "tool_trace": [],
+  "stop_reason": "stop",
+  "input_tokens": 55,
+  "output_tokens": 1323,
+  "latency_ms": 17094,
+  "iterations": 1,
+  "deterministic": {
+    "required_present": [
+      {
+        "term": "(\\b[CDEF]\\b|200[3-9]-20[01][02]|2003-2004|2005-2006|2007-2008|2009-2010)",
+        "matched": true
+      },
+      {
+        "term": "(negative|inverse|below zero|<\\s*0)",
+        "matched": true
+      },
+      {
+        "term": "(PFOA|LBXPFOA)",
+        "matched": true
+      },
+      {
+        "term": "(cholesterol|LBXTC)",
+        "matched": true
+      }
+    ],
+    "forbidden_absent": [
+      {
+        "term": "(approximately|I don'?t have|cannot determine)",
+        "matched": false
+      }
+    ],
+    "required_tools_called": [],
+    "pass": true
+  }
+}

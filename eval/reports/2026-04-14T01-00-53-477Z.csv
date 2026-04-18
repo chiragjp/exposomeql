@@ -1,0 +1,14 @@
+id,category,with_pass,without_pass,with_tools_called,without_tools_called,with_tokens,without_tokens,with_latency_ms,without_latency_ms
+hallucination_fake_chemical,hallucination_bait,false,false,1,0,31841,334,4939,3508
+hallucination_fake_pfas_thyroid_claim,hallucination_bait,true,false,4,0,64775,310,41371,8524
+outcome_cadmium_uric_null,outcome,false,false,3,0,64816,334,70710,6976
+outcome_lead_hemoglobin_paradox,outcome,true,false,3,0,64771,391,69734,6621
+outcome_pfas_thyroid_null,outcome,false,false,32,0,158899,405,170166,19924
+outcome_pfoa_uric_acid,outcome,true,false,6,0,147351,392,149273,23217
+process_iron_hemoglobin_confounder,process_confounding,true,true,6,0,59505,466,60058,8948
+process_pfas_albumin_confounder,process_confounding,true,false,20,0,120044,628,106148,36468
+process_vitd_recall_vs_biomarker,process_confounding,false,false,0,0,0,0,1750,1721
+process_uric_acid_ewas_multiple_testing,process_multiple_comparisons,true,true,2,0,59348,582,59385,9700
+process_diet_dbp_reverse_causality,process_reverse_causality,false,false,15,0,78943,417,80947,13139
+process_pfas_chol_simpsons,process_simpsons,true,false,6,0,90121,434,84164,19617
+process_uric_acid_triangulation,process_triangulation,true,false,18,0,199941,0,156182,1574

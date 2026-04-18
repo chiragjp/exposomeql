@@ -1,0 +1,23 @@
+id: process_diet_dbp_reverse_causality
+category: process_reverse_causality
+prompt: |
+  In NHANES, dietary sodium, potassium, and magnesium intake are all *positively* associated
+  with diastolic blood pressure — opposite to RCT evidence. What's going on?
+expected:
+  pattern: systematic_reverse_causation
+  mechanism: hypertensive_individuals_change_diet_after_diagnosis
+required_tools:
+  - "nhanes_sensitivity"
+deterministic_checks:
+  required_terms:
+    # Accept any valid confounding/non-causal story for the RCT-EPWAS flip:
+    # reverse causation from diagnosis, confounding by age/calories/diet quality,
+    # behavior change on medication, Simpson-style subgroup artifact.
+    - "(reverse caus|diagnosed|treatment|medication|after.*diagnosis|confound|caloric|total (intake|energy|food)|diet quality|age|healthier|unhealth)"
+    - "(sodium|potassium|magnesium|DBP|diastolic)"
+  forbidden_terms:
+    - "salt.*lowers blood pressure"
+rubric:
+  - identifies_reverse_causation
+  - runs_sensitivity_excluding_diagnosed
+  - explains_diet_change_after_diagnosis
