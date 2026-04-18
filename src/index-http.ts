@@ -7,7 +7,8 @@ const PORT = Number(process.env.EXPOSOMEQL_PORT ?? 3001);
 const MCP_PATH = "/mcp";
 
 async function main() {
-  const mcpServer = await createServer();
+  // Warm the shared context up front so the first request doesn't pay init cost.
+  await createServer();
 
   const transports = new Map<string, StreamableHTTPServerTransport>();
 
@@ -35,8 +36,11 @@ async function main() {
     }
 
     if (req.method === "POST" && !sessionId) {
-      const transport = new StreamableHTTPServerTransport({
+      const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (sid: string) => {
+          transports.set(sid, transport);
+        },
       });
 
       transport.onclose = () => {
@@ -44,11 +48,11 @@ async function main() {
         if (sid) transports.delete(sid);
       };
 
-      await mcpServer.connect(transport);
-
-      const sid = transport.sessionId;
-      if (sid) transports.set(sid, transport);
-
+      // Each session gets its own McpServer instance (the SDK enforces a 1:1
+      // server↔transport mapping). The heavy AppContext is cached internally
+      // by createServer().
+      const sessionServer = await createServer();
+      await sessionServer.connect(transport);
       await transport.handleRequest(req, res);
       return;
     }

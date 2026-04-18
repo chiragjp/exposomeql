@@ -8,27 +8,51 @@ import { registerTools } from "./tools/index.js";
 import { registerResources } from "./resources/index.js";
 import type { AppContext } from "./types.js";
 
+// Heavy subsystems (DuckDB connections, variable index, R executor) are shared
+// across every MCP session. Only the McpServer + transport are per-session.
+let cachedContext: AppContext | null = null;
+let contextPromise: Promise<AppContext> | null = null;
+
+async function getContext(): Promise<AppContext> {
+  if (cachedContext) return cachedContext;
+  if (!contextPromise) {
+    contextPromise = (async () => {
+      const config = loadConfig();
+      const db = new DuckDBManager();
+      await db.initialize(config);
+      const resolver = new VariableResolver(db);
+      await resolver.initialize();
+      const rExec = new RExecutor(config);
+      const cohorts = await db.discoverCohorts(config.hhearDataDir);
+      cachedContext = { db, resolver, rExec, cohorts };
+      console.error("[exposomeql] Server initialized with data from:", config.dataDir);
+      if (cohorts.length > 0) {
+        console.error(`[exposomeql] HHEAR cohorts available: ${cohorts.map(c => c.id).join(", ")}`);
+      }
+      // Non-blocking R dependency check — warn but don't fail startup so SQL/EP-WAS
+      // tools still work for users who haven't installed R packages yet.
+      rExec.checkRDependencies().then((missing) => {
+        if (missing === null) {
+          console.error("[exposomeql] WARNING: Rscript not found or failed to run. R-backed tools (nhanes_mean, nhanes_model, etc.) will not work. Install R from https://cran.r-project.org, then run: npm run setup-r");
+        } else if (missing.length > 0) {
+          console.error(`[exposomeql] WARNING: missing R packages: ${missing.join(", ")}. R-backed tools will fail. Run: npm run setup-r`);
+        } else {
+          console.error("[exposomeql] R dependencies OK");
+        }
+      });
+      return cachedContext;
+    })();
+  }
+  return contextPromise;
+}
+
 export async function createServer(): Promise<McpServer> {
-  const config = loadConfig();
+  const ctx = await getContext();
 
   const server = new McpServer({
     name: "exposomeql",
     version: "0.2.0",
   });
-
-  // Initialize subsystems
-  const db = new DuckDBManager();
-  await db.initialize(config);
-
-  const resolver = new VariableResolver(db);
-  await resolver.initialize();
-
-  const rExec = new RExecutor(config);
-
-  // Discover HHEAR cohorts
-  const cohorts = await db.discoverCohorts(config.hhearDataDir);
-
-  const ctx: AppContext = { db, resolver, rExec, cohorts };
 
   // Register tools, resources, and prompts
   registerTools(server, ctx);
@@ -125,24 +149,6 @@ export async function createServer(): Promise<McpServer> {
       }],
     })
   );
-
-  console.error("[exposomeql] Registered 4 prompts");
-  console.error("[exposomeql] Server initialized with data from:", config.dataDir);
-  if (cohorts.length > 0) {
-    console.error(`[exposomeql] HHEAR cohorts available: ${cohorts.map(c => c.id).join(", ")}`);
-  }
-
-  // Non-blocking R dependency check — warn but don't fail startup so SQL/EP-WAS
-  // tools still work for users who haven't installed R packages yet.
-  rExec.checkRDependencies().then((missing) => {
-    if (missing === null) {
-      console.error("[exposomeql] WARNING: Rscript not found or failed to run. R-backed tools (nhanes_mean, nhanes_model, etc.) will not work. Install R from https://cran.r-project.org, then run: npm run setup-r");
-    } else if (missing.length > 0) {
-      console.error(`[exposomeql] WARNING: missing R packages: ${missing.join(", ")}. R-backed tools will fail. Run: npm run setup-r`);
-    } else {
-      console.error("[exposomeql] R dependencies OK");
-    }
-  });
 
   return server;
 }
