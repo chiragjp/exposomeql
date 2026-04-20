@@ -141,6 +141,29 @@ export const EPWAS_MULTIPLE_TESTING = {
   note: "P-values are nominal. Bonferroni threshold for the full EP-WAS catalog is 3.02e-07 (0.05 / 165,342 tests on model 6). For a hypothesis-driven single test you may use nominal p<0.05; for screening across many exposures/phenotypes apply Bonferroni or BH-FDR.",
 } as const;
 
+/** Epistemic caveats — embedded in every EP-WAS tool response so the model
+ *  encounters them while reading results, not just in system instructions. */
+export const EPWAS_CAVEATS = {
+  study_design: "Cross-sectional (NHANES) — no temporal ordering; associations, not causation.",
+  causal_language: "Do not use causal language ('causes', 'leads to', 'prevents'). Use 'is associated with'.",
+  alternative_explanations: [
+    "Unmeasured or residual confounding (variables not in the adjustment model)",
+    "Reverse causation (disease status alters exposure, e.g., medication use, dietary change after diagnosis)",
+    "Healthy-participant / selection bias (healthier individuals may have different exposure profiles)",
+    "Measurement error (single time-point exposure may not reflect chronic exposure)",
+    "Collider bias (conditioning on a common effect of exposure and outcome)",
+  ],
+  what_would_strengthen: [
+    "Prospective cohort replication with temporal ordering",
+    "Mendelian randomization (genetic instrument for the exposure)",
+    "Randomized controlled trial (where ethical and feasible)",
+    "Dose-response gradient across exposure levels",
+    "Biological mechanism from CTD or experimental literature",
+    "Consistency across independent populations (HHEAR cohorts)",
+  ],
+  effect_context: "Beta is per 1-SD change in log₁₀(exposure). Compare effect magnitude to within-person measurement variability before interpreting as clinically meaningful.",
+} as const;
+
 /** EP-WAS adjustment model descriptions (matches adjustment.R scenario order) */
 export const MODEL_DESCRIPTIONS: Record<number, string> = {
   1: "base (unadjusted)",

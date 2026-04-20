@@ -36,6 +36,8 @@ const TOOL_NUDGE_SYSTEM = `You have access to ExposomeQL, a comprehensive enviro
 type ModelFamily = "anthropic" | "openai" | "gemini";
 
 function detectFamily(model: string): ModelFamily {
+  // OPENAI_BASE_URL set → always use OpenAI-compatible path (Ollama, vLLM, etc.)
+  if (process.env.OPENAI_BASE_URL) return "openai";
   if (model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4")) return "openai";
   if (model.startsWith("gemini")) return "gemini";
   return "anthropic";
@@ -441,7 +443,9 @@ async function main() {
 
   // Create LLM client + convert tool schemas
   const anthropicClient = FAMILY === "anthropic" ? new Anthropic() : null;
-  const openaiClient = FAMILY === "openai" ? new OpenAI() : null;
+  const openaiClient = FAMILY === "openai" ? new OpenAI({
+    baseURL: process.env.OPENAI_BASE_URL,
+  }) : null;
   const geminiClient = FAMILY === "gemini" ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! }) : null;
   const anthropicTools = FAMILY === "anthropic" ? toAnthropicTools(mcpTools) : [];
   const openaiTools = FAMILY === "openai" ? toOpenAITools(mcpTools) : [];

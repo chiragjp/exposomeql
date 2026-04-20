@@ -7,7 +7,7 @@ import type { AppContext, ResolveResult, CohortConfig } from "../types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-import { MODEL_DESCRIPTIONS, CYCLE_TO_SERIES, SERIES_MAP, EPWAS_MULTIPLE_TESTING } from "../types.js";
+import { MODEL_DESCRIPTIONS, CYCLE_TO_SERIES, SERIES_MAP, EPWAS_MULTIPLE_TESTING, EPWAS_CAVEATS } from "../types.js";
 import { benjaminiHochberg } from "../guardrails/multiple-testing.js";
 
 /** Annotate each EP-WAS result row with a survives_bonferroni flag (uses the
@@ -1044,6 +1044,7 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
                   n_results: enriched.length,
                   n_survives_bonferroni: annotateMultipleTesting(enriched).filter((r) => r.survives_bonferroni).length,
                   results: annotateMultipleTesting(enriched),
+                  caveats: EPWAS_CAVEATS,
                   note: "Effect sizes are from survey-weighted linear regression with exposure log10-transformed and z-scored. P-values are nominal; see multiple_testing for the Bonferroni threshold and survives_bonferroni per row.",
                 },
                 null,
@@ -1130,6 +1131,7 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
                   n_results: topN.length,
                   n_survives_bonferroni: bh.rows.filter((r) => r.survives_bonferroni).length,
                   n_survives_fdr_05: bh.n_survives_fdr_05,
+                  caveats: EPWAS_CAVEATS,
                   results: topN,
                 },
                 null,
@@ -1212,6 +1214,7 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
                   n_results: topN.length,
                   n_survives_bonferroni: bh.rows.filter((r) => r.survives_bonferroni).length,
                   n_survives_fdr_05: bh.n_survives_fdr_05,
+                  caveats: EPWAS_CAVEATS,
                   results: topN,
                 },
                 null,
@@ -2134,6 +2137,125 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
             { type: "text" as const, text: `Error: ${(err as Error).message}` },
           ],
         };
+      }
+    }
+  );
+
+  // ── Tool: nhanes_quantile_regression ──
+
+  server.tool(
+    "nhanes_quantile_regression",
+    "Multi-tau quantile regression: estimate how an exposure's effect varies across the outcome distribution. Fits outcome ~ exposure + covariates at τ ∈ {0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95} using survey-weighted quantreg::rq. Answers questions like 'does lead affect uric acid more at the 95th percentile than the 25th?' — revealing heterogeneous effects that mean-regression misses. Multi-cycle pooling is automatic.",
+    {
+      exposure: z.string().describe("Exposure variable (e.g., 'LBXBPB', 'LBXPFOA')"),
+      outcome: z.string().describe("Outcome/phenotype variable (e.g., 'LBXSUA', 'LBXSCH')"),
+      covariates: z.array(z.string()).optional()
+        .describe("Additional covariates (e.g., ['RIDAGEYR', 'RIAGENDR', 'RIDRETH1']). Default: none (unadjusted)."),
+      taus: z.array(z.number()).optional()
+        .describe("Quantiles to estimate (default: [0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95])"),
+      cycles: z.array(z.string()).optional()
+        .describe("NHANES cycles (e.g., ['2003-2004', '2005-2006']). Default: most recent available."),
+      log_exposure: z.boolean().optional().default(true)
+        .describe("Log10-transform the exposure (default: true, matches EP-WAS convention)"),
+    },
+    async ({ exposure, outcome, covariates, taus, cycles, log_exposure }) => {
+      const eRes = await ctx.resolver.resolve(exposure);
+      if (!eRes.resolved) {
+        return { content: [{ type: "text" as const, text: eRes.candidates ? `Ambiguous exposure. Candidates:\n${formatCandidates(eRes)}` : `Exposure "${exposure}" not found.` }] };
+      }
+      const pRes = await ctx.resolver.resolve(outcome);
+      if (!pRes.resolved) {
+        return { content: [{ type: "text" as const, text: pRes.candidates ? `Ambiguous outcome. Candidates:\n${formatCandidates(pRes)}` : `Outcome "${outcome}" not found.` }] };
+      }
+
+      let resolvedCovs: string[] | null = null;
+      if (covariates && covariates.length > 0) {
+        resolvedCovs = [];
+        for (const c of covariates) {
+          const rc = await ctx.resolver.resolve(c);
+          if (!rc.resolved) {
+            return { content: [{ type: "text" as const, text: `Covariate "${c}" not found.` }] };
+          }
+          resolvedCovs.push(rc.variable!.variableName);
+        }
+      }
+
+      try {
+        const rResult = await ctx.rExec.execute("nhanes_quantile_regression.R", {
+          exposure: eRes.variable!.variableName,
+          outcome: pRes.variable!.variableName,
+          covariates: resolvedCovs,
+          taus: taus ?? null,
+          cycles: cycles ? mapCyclesToSeries(cycles) : null,
+          log_exposure: log_exposure ?? true,
+        }, 120_000);
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              ...(rResult as Record<string, unknown>),
+              exposure_description: eRes.variable!.description,
+              outcome_description: pRes.variable!.description,
+              caveats: EPWAS_CAVEATS,
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error running quantile regression: ${(err as Error).message}` }] };
+      }
+    }
+  );
+
+  // ── Tool: nhanes_reference_interval ──
+
+  server.tool(
+    "nhanes_reference_interval",
+    "Compute conditional reference intervals for a biomarker given age and sex using survey-weighted quantile regression on NHANES. Returns predicted percentiles (2.5th–97.5th = clinical 'normal range') at specified age/sex combinations. Answers 'what is the expected range of serum uric acid for a 50-year-old male?' No ethnicity conditioning — reference intervals are population-level by design.",
+    {
+      biomarker: z.string().describe("Biomarker variable (e.g., 'LBXSUA', 'LBXSCH', 'LBXGLU', 'LBXCRP')"),
+      predict_age: z.array(z.number()).optional()
+        .describe("Ages to predict at (default: [20, 30, 40, 50, 60, 70])"),
+      predict_sex: z.enum(["1", "2", "both"]).optional().default("both")
+        .describe("Sex to predict for: '1' = male, '2' = female, 'both' (default)"),
+      taus: z.array(z.number()).optional()
+        .describe("Quantiles to estimate (default: [0.025, 0.05, 0.25, 0.50, 0.75, 0.95, 0.975])"),
+      cycles: z.array(z.string()).optional()
+        .describe("NHANES cycles (default: 3 most recent available)"),
+      age_spline: z.boolean().optional().default(true)
+        .describe("Use age + age² to capture nonlinear age effects (default: true)"),
+    },
+    async ({ biomarker, predict_age, predict_sex, taus, cycles, age_spline }) => {
+      const bRes = await ctx.resolver.resolve(biomarker);
+      if (!bRes.resolved) {
+        return { content: [{ type: "text" as const, text: bRes.candidates ? `Ambiguous biomarker. Candidates:\n${formatCandidates(bRes)}` : `Biomarker "${biomarker}" not found.` }] };
+      }
+
+      try {
+        const rResult = await ctx.rExec.execute("nhanes_reference_interval.R", {
+          biomarker: bRes.variable!.variableName,
+          predict_age: predict_age ?? null,
+          predict_sex: predict_sex ?? "both",
+          taus: taus ?? null,
+          cycles: cycles ? mapCyclesToSeries(cycles) : null,
+          age_spline: age_spline ?? true,
+        }, 120_000);
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              ...(rResult as Record<string, unknown>),
+              biomarker_description: bRes.variable!.description,
+              caveats: {
+                ...EPWAS_CAVEATS,
+                reference_interval_note: "These are population-level conditional distributions from NHANES, not clinical reference ranges from a laboratory. Individual values outside the interval are not necessarily abnormal — they indicate where a value falls relative to the NHANES population of that age and sex.",
+              },
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error computing reference interval: ${(err as Error).message}` }] };
       }
     }
   );
@@ -7098,7 +7220,7 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
     }
   );
 
-  console.error(`[exposomeql] Registered 60 tools (6 Descriptive, 5 Bivariate, 6 EP-WAS, 7 Regression, 9 HHEAR, 6 Chemical/CTD, 4 Cross-cutting, 5 Nutrient, 5 Diagnostics, 2 Correlation, 2 Evidence, 1 Personal, 2 Diet, 3 Sensitivity/N-of-1, 2 Validation)`);
+  console.error(`[exposomeql] Registered 62 tools (6 Descriptive, 5 Bivariate, 6 EP-WAS, 8 Regression, 1 Reference Interval, 9 HHEAR, 6 Chemical/CTD, 4 Cross-cutting, 5 Nutrient, 5 Diagnostics, 2 Correlation, 2 Evidence, 1 Personal, 2 Diet, 3 Sensitivity/N-of-1, 2 Validation)`);
 }
 
 /** Find a cohort config by ID */

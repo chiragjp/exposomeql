@@ -59,7 +59,20 @@ export async function createServer(): Promise<McpServer> {
   registerResources(server, ctx);
 
   // Register MCP prompts — these appear as selectable templates in Claude Desktop
-  // and instruct the LLM to use ExposomeQL tools
+  // and instruct the LLM to use ExposomeQL tools.
+  //
+  // Every prompt embeds an epistemic-caution preamble so the model's output
+  // is scientifically conservative: associations not causation, alternative
+  // hypotheses enumerated, and evidence gaps named.
+  const EPISTEMIC_PREAMBLE = `IMPORTANT — Epistemic standards for all answers:
+- NHANES is cross-sectional: say "associated with," never "causes" or "leads to." Explain why the distinction matters.
+- For every association you report, enumerate at least two alternative explanations (confounding, reverse causation, selection bias, measurement error, collider bias).
+- Distinguish statistical significance (p-value) from clinical or public health significance (effect size relative to measurement noise and population variability).
+- State what evidence would strengthen or weaken the claim (prospective cohort, Mendelian randomization, RCT, dose-response gradient, biological mechanism).
+- When multiple interpretations are consistent with the data, present all of them ranked by plausibility rather than selecting one.
+- Acknowledge what is NOT in the data: unmeasured confounders, populations not represented in NHANES, exposure windows not captured by a single cross-sectional measurement.
+- Be specific about uncertainty: report confidence intervals, heterogeneity (I²), and the number of cycles contributing to each estimate.
+`;
 
   server.prompt(
     "assess-exposure",
@@ -70,7 +83,8 @@ export async function createServer(): Promise<McpServer> {
         role: "user",
         content: {
           type: "text",
-          text: `Assess the health effects of ${exposure} using the ExposomeQL tools. You MUST:
+          text: `${EPISTEMIC_PREAMBLE}
+Assess the health effects of ${exposure} using the ExposomeQL tools. You MUST:
 1. Use epwas_summary or epwas_search to get the EP-WAS associations from NHANES
 2. Use confounder_check to identify potential confounders
 3. Use ctd_chemical_genes to get mechanistic evidence
@@ -95,7 +109,8 @@ export async function createServer(): Promise<McpServer> {
         role: "user",
         content: {
           type: "text",
-          text: `I am a ${age}-year-old ${sex}. ${measurements ? `My measurements: ${measurements}.` : ""} Using the ExposomeQL tools, please:
+          text: `${EPISTEMIC_PREAMBLE}
+I am a ${age}-year-old ${sex}. ${measurements ? `My measurements: ${measurements}.` : ""} Using the ExposomeQL tools, please:
 1. Use my_exposome to scan relevant environmental exposures for my profile
 2. For any measurements I provided, use measurement_uncertainty to quantify how reliable each single reading is
 3. Use find_doppelgangers to show me what NHANES participants like me look like health-wise
@@ -116,7 +131,8 @@ export async function createServer(): Promise<McpServer> {
         role: "user",
         content: {
           type: "text",
-          text: `Evaluate this health claim using ExposomeQL data: "${claim}". You MUST:
+          text: `${EPISTEMIC_PREAMBLE}
+Evaluate this health claim using ExposomeQL data: "${claim}". You MUST:
 1. Use epwas_search to check if the association exists in NHANES data
 2. Use simpson_paradox_test to check if the association reverses within NHANES cycles
 3. Use confounder_check to identify potential confounders
@@ -138,7 +154,8 @@ export async function createServer(): Promise<McpServer> {
         role: "user",
         content: {
           type: "text",
-          text: `I ate: ${diet}. Using the ExposomeQL tools, please:
+          text: `${EPISTEMIC_PREAMBLE}
+I ate: ${diet}. Using the ExposomeQL tools, please:
 1. Estimate the nutrient content of this meal
 2. Use diet_assess to compare against DRI thresholds and get EP-WAS associations
 3. Use diet_quality to show where this meal falls on the HEI scale
