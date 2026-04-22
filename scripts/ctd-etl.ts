@@ -130,6 +130,10 @@ const CTD_FILES = [
 const args = new Set(process.argv.slice(2));
 const SKIP_DOWNLOAD = args.has("--skip-download");
 const SKIP_FILTER = args.has("--skip-filter");
+/** --full: load ALL CTD chemicals, not just the 325 in the NHANES/HHEAR panel.
+ *  Enables ctd_query tool to answer questions about microplastics, polystyrenes,
+ *  novel chemicals, etc. that have no NHANES biomonitoring code. */
+const FULL_CTD = args.has("--full");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -270,7 +274,7 @@ async function filterTSV(
     // CTD MeSH IDs are prefixed with "MESH:" -- strip for comparison
     const cleanMeshId = meshId?.replace(/^MESH:/, "") || "";
 
-    if (CTD_MESH_IDS.has(cleanMeshId)) {
+    if (FULL_CTD || CTD_MESH_IDS.has(cleanMeshId)) {
       out.write(line + "\n");
       matchCount++;
     }

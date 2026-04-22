@@ -82,7 +82,7 @@ import { checkLOD, isLabBiomarker } from "../guardrails/lod-handling.js";
 import { generateMeanCode, generateConditionalCode } from "../codegen/r-code-generator.js";
 import { NHANES_HHEAR_BRIDGE, BRIDGE_BY_HHEAR, BRIDGE_BY_NHANES } from "../variables/nhanes-hhear-bridge.js";
 import { resolveChemical, COMPTOX_BY_HHEAR, THRESHOLDS_BY_NHANES_VAR } from "../variables/comptox-chemicals.js";
-import { resolveChemicalForCTD, CTD_BY_NHANES, CTD_BY_CATEGORY, type CTDChemicalMapping } from "../variables/ctd-chemical-map.js";
+import { resolveChemicalForCTD, CTD_BY_NHANES, CTD_BY_CATEGORY, CTD_BY_MESH, CTD_CHEMICAL_MAP, type CTDChemicalMapping } from "../variables/ctd-chemical-map.js";
 
 /** JSON replacer that converts BigInt to Number */
 function bigintReplacer(_key: string, value: unknown): unknown {
@@ -2260,6 +2260,172 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
     }
   );
 
+  // ── Tool: mortality_search ──
+
+  server.tool(
+    "mortality_search",
+    "Search pre-computed exposure → mortality associations (Cox PH hazard ratios) from NHANES linked to the National Death Index. Supports all-cause and cause-specific mortality (heart disease, cancer, diabetes, cerebrovascular, kidney). Covers ~685 exposures for all-cause and ~250-660 per cause, fully adjusted (age + sex + race + income + education + survey cycle), pooled across all available NHANES cycles. Use this for rapid screening; use nhanes_survival for custom analyses.",
+    {
+      exposure: z.string().optional()
+        .describe("Search by specific exposure variable or name (e.g., 'cadmium', 'LBXBCD')"),
+      cause: z.enum(["all", "heart", "cancer", "diabetes_ucod", "cerebrovascular", "kidney"]).optional().default("all")
+        .describe("Mortality cause: 'all' (default), 'heart', 'cancer', 'diabetes_ucod', 'cerebrovascular', 'kidney'"),
+      top_n: z.number().optional().default(20)
+        .describe("Max results (default: 20)"),
+      min_events: z.number().optional().default(20)
+        .describe("Minimum death events required (default: 20)"),
+      sort_by: z.enum(["p_value", "hr", "abs_log_hr"]).optional().default("p_value")
+        .describe("Sort order: 'p_value' (most significant first), 'hr' (highest risk), 'abs_log_hr' (largest effect)"),
+    },
+    async ({ exposure, cause, top_n, min_events, sort_by }) => {
+      const lim = top_n ?? 20;
+      const minEv = min_events ?? 20;
+      const selectedCause = cause ?? "all";
+      const sortCol = sort_by === "hr" ? "hr DESC" : sort_by === "abs_log_hr" ? "ABS(log_hr) DESC" : "p_value ASC";
+
+      // All-cause uses mortality_exwas; cause-specific uses mortality_exwas_causes
+      const isAllCause = selectedCause === "all";
+      const tableName = isAllCause ? "nhanes.mortality_exwas" : "nhanes.mortality_exwas_causes";
+
+      try {
+        let whereClause = `p_value IS NOT NULL AND n_events >= ${minEv} AND error IS NULL`;
+        const params: unknown[] = [];
+        let paramIdx = 1;
+
+        if (!isAllCause) {
+          whereClause += ` AND cause = $${paramIdx}`;
+          params.push(selectedCause);
+          paramIdx++;
+        }
+
+        if (exposure) {
+          const r = await ctx.resolver.resolve(exposure);
+          if (r.resolved) {
+            whereClause += ` AND exposure = $${paramIdx}`;
+            params.push(r.variable!.variableName);
+          } else {
+            whereClause += ` AND exposure LIKE $${paramIdx}`;
+            params.push(`%${exposure.toUpperCase()}%`);
+          }
+        }
+
+        const cols = isAllCause
+          ? "exposure, log_hr, hr, hr_lower, hr_upper, p_value, n, n_events, n_cycles, cycles, median_followup_years, model"
+          : "exposure, cause, cause_label, log_hr, hr, hr_lower, hr_upper, p_value, n, n_events, n_cycles, cycles, median_followup_years";
+        const sql = `SELECT ${cols} FROM ${tableName} WHERE ${whereClause} ORDER BY ${sortCol} LIMIT ${lim}`;
+        const rows = await ctx.db.query(sql, ...params);
+
+        const enriched = (rows as Record<string, unknown>[]).map((row) => {
+          const v = ctx.resolver.get(row.exposure as string);
+          return { ...row, exposure_description: v?.description ?? "Unknown" };
+        });
+
+        // Count totals
+        const countSql = `SELECT COUNT(*)::INTEGER as total, SUM(CASE WHEN p_value < 0.05 THEN 1 ELSE 0 END)::INTEGER as nominal FROM ${tableName} WHERE p_value IS NOT NULL AND n_events >= ${minEv} AND error IS NULL${!isAllCause ? ` AND cause = '${selectedCause}'` : ""}`;
+        const totalRows = (await ctx.db.query(countSql)) as Record<string, unknown>[];
+        const totals = totalRows[0] ?? {};
+        const totalN = (totals.total as number) || 1;
+
+        const causeLabels: Record<string, string> = {
+          all: "All-cause mortality",
+          heart: "Heart disease mortality",
+          cancer: "Malignant neoplasm mortality",
+          diabetes_ucod: "Diabetes mortality (underlying cause)",
+          cerebrovascular: "Cerebrovascular disease mortality",
+          kidney: "Kidney disease mortality",
+        };
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              query: exposure ?? "all exposures",
+              cause: selectedCause,
+              cause_label: causeLabels[selectedCause] ?? selectedCause,
+              n_results: enriched.length,
+              total_exposures_tested: totals.total,
+              n_nominal_significant: totals.nominal,
+              bonferroni_threshold: 0.05 / totalN,
+              results: enriched,
+              caveats: {
+                ...EPWAS_CAVEATS,
+                study_design: "Prospective mortality follow-up (NHANES → NDI linkage through Dec 2019). Stronger than cross-sectional but still observational.",
+                model: "Cox PH, survey-weighted, adjusted for age + sex + race/ethnicity + income + education + survey cycle. HR is per 1-SD change in log10(exposure).",
+                cause_specific_note: isAllCause ? null : "Cause-specific mortality has fewer events than all-cause, reducing statistical power. Extreme HRs (near 0 or >5) in small samples may reflect model instability.",
+              },
+              note: `Pre-computed ExWAS on ${causeLabels[selectedCause]?.toLowerCase() ?? "mortality"}. Methodology follows Patel, Rehkopf, Leppert et al. IJE 2013.`,
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Mortality search error: ${(err as Error).message}. If 'no such table', run: Rscript scripts/compute-mortality-exwas.R and Rscript scripts/compute-mortality-exwas-causes.R` }] };
+      }
+    }
+  );
+
+  // ── Tool: nhanes_survival ──
+
+  server.tool(
+    "nhanes_survival",
+    "Cox proportional hazards regression for exposure → all-cause or cause-specific mortality using NHANES linked to the National Death Index (follow-up through Dec 2019, median ~15 years). Implements the Patel, Rehkopf, Leppert et al. (IJE 2013) ExWAS-mortality methodology. Returns hazard ratios with 95% CIs per 1-SD change in log10(exposure). Use this when the question is about whether an exposure is associated with DEATH, not just a biomarker level.",
+    {
+      exposure: z.string().describe("Exposure variable (e.g., 'LBXBPB', 'LBXCOT', 'LBXBCD')"),
+      cause: z.enum(["all", "heart", "cancer", "diabetes"]).optional().default("all")
+        .describe("Mortality cause: 'all' (default), 'heart', 'cancer', or 'diabetes'"),
+      covariates: z.array(z.string()).optional()
+        .describe("Covariates (e.g., ['RIDAGEYR','RIAGENDR','RIDRETH1','INDFMPIR','DMDEDUC2']). Default: none."),
+      cycles: z.array(z.string()).optional()
+        .describe("NHANES cycles (default: 3 most recent with data)"),
+      log_exposure: z.boolean().optional().default(true)
+        .describe("Log10-transform and z-score the exposure (default: true)"),
+    },
+    async ({ exposure, cause, covariates, cycles, log_exposure }) => {
+      const eRes = await ctx.resolver.resolve(exposure);
+      if (!eRes.resolved) {
+        return { content: [{ type: "text" as const, text: eRes.candidates ? `Ambiguous exposure. Candidates:\n${formatCandidates(eRes)}` : `Exposure "${exposure}" not found.` }] };
+      }
+
+      let resolvedCovs: string[] | null = null;
+      if (covariates && covariates.length > 0) {
+        resolvedCovs = [];
+        for (const c of covariates) {
+          const rc = await ctx.resolver.resolve(c);
+          if (!rc.resolved) {
+            return { content: [{ type: "text" as const, text: `Covariate "${c}" not found.` }] };
+          }
+          resolvedCovs.push(rc.variable!.variableName);
+        }
+      }
+
+      try {
+        const rResult = await ctx.rExec.execute("nhanes_survival.R", {
+          exposure: eRes.variable!.variableName,
+          cause: cause ?? "all",
+          covariates: resolvedCovs,
+          cycles: cycles ? mapCyclesToSeries(cycles) : null,
+          log_exposure: log_exposure ?? true,
+        }, 120_000);
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              ...(rResult as Record<string, unknown>),
+              exposure_description: eRes.variable!.description,
+              caveats: {
+                ...EPWAS_CAVEATS,
+                study_design: "Prospective mortality follow-up (NHANES → NDI linkage through Dec 2019). Stronger than cross-sectional for causal inference but still observational — unmeasured confounding remains possible.",
+                survival_note: "HR is per 1-SD change in log10(exposure). Proportional hazards assumption should be verified for strong associations. Multiple testing correction applies when scanning many exposures.",
+              },
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error running survival analysis: ${(err as Error).message}` }] };
+      }
+    }
+  );
+
   // ═══════════════════════════════════════════════════════════════════
   // HHEAR COHORT TOOLS
   // ═══════════════════════════════════════════════════════════════════
@@ -3374,6 +3540,206 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
             text: `CTD GO enrichment query failed: ${(err as Error).message}. Make sure CTD data has been loaded (run: npx tsx scripts/ctd-etl.ts).`,
           }],
         };
+      }
+    }
+  );
+
+  // ── Tool: ctd_query ──
+  // Direct CTD query that does NOT require a NHANES or HHEAR mapping.
+  // Searches the CTD Parquet files by chemical name substring or MeSH ID,
+  // returning gene interactions, disease associations, and pathways for ANY
+  // chemical in CTD — including microplastics, polystyrenes, novel chemicals.
+
+  server.tool(
+    "ctd_query",
+    "Query the Comparative Toxicogenomics Database (CTD) for ANY chemical — including chemicals NOT measured in NHANES or HHEAR (e.g., microplastics, polystyrenes, novel chemicals). Searches by chemical name (substring match) or MeSH ID directly in the CTD Parquet files. Returns gene interactions, disease associations, and enriched pathways. Use this when ctd_chemical_genes returns nothing because the chemical lacks a NHANES code.",
+    {
+      chemical: z.string().describe("Chemical name (e.g., 'microplastics', 'polystyrene', 'bisphenol A') or MeSH ID (e.g., 'D000077800')"),
+      data_type: z.enum(["genes", "diseases", "pathways", "all"]).optional().default("all")
+        .describe("What to query: 'genes', 'diseases', 'pathways', or 'all' (default)"),
+      organism: z.string().optional().default("Homo sapiens")
+        .describe("Organism filter for gene interactions (default: 'Homo sapiens')"),
+      limit: z.number().optional().default(25)
+        .describe("Max results per data type (default: 25)"),
+    },
+    async ({ chemical, data_type, organism, limit: maxRows }) => {
+      const lim = maxRows ?? 25;
+      const org = organism ?? "Homo sapiens";
+      const dtype = data_type ?? "all";
+
+      // Resolve: try MeSH ID directly, then name substring in CTD parquet
+      const isMesh = /^[DC]\d{6,}$/.test(chemical.trim());
+      const meshFilter = isMesh
+        ? `mesh_id = '${chemical.trim()}'`
+        : `LOWER(chemical_name) LIKE '%${chemical.trim().toLowerCase().replace(/'/g, "''")}%'`;
+
+      try {
+        const result: Record<string, unknown> = { chemical_query: chemical };
+
+        // Find matching chemicals first
+        const chemRows = await ctx.db.query(
+          `SELECT DISTINCT mesh_id, chemical_name, cas
+           FROM ctd_chem_gene WHERE ${meshFilter} LIMIT 20`
+        );
+        if ((chemRows as unknown[]).length === 0) {
+          // Try disease table as fallback
+          const chemRows2 = await ctx.db.query(
+            `SELECT DISTINCT mesh_id, chemical_name, cas
+             FROM ctd_chem_disease WHERE ${meshFilter} LIMIT 20`
+          );
+          if ((chemRows2 as unknown[]).length === 0) {
+            return { content: [{ type: "text" as const, text: `No CTD entries found for "${chemical}". The chemical may not be in CTD, or try a different name/MeSH ID. Run the ETL with --full to load all CTD chemicals: npx tsx scripts/ctd-etl.ts --full` }] };
+          }
+          result.chemicals_found = chemRows2;
+        } else {
+          result.chemicals_found = chemRows;
+        }
+        const foundMeshIds = (result.chemicals_found as Record<string, unknown>[]).map((r) => `'${r.mesh_id}'`).join(",");
+
+        if (dtype === "genes" || dtype === "all") {
+          const genes = await ctx.db.query(
+            `SELECT mesh_id, chemical_name, gene_symbol, gene_id, organism, interaction, interaction_actions, pubmed_ids
+             FROM ctd_chem_gene
+             WHERE mesh_id IN (${foundMeshIds}) AND organism = '${org}'
+             ORDER BY gene_symbol LIMIT ${lim}`
+          );
+          result.gene_interactions = genes;
+          result.n_gene_interactions = (genes as unknown[]).length;
+        }
+
+        if (dtype === "diseases" || dtype === "all") {
+          const diseases = await ctx.db.query(
+            `SELECT mesh_id, chemical_name, disease_name, disease_id, direct_evidence, inference_score
+             FROM ctd_chem_disease
+             WHERE mesh_id IN (${foundMeshIds}) AND direct_evidence IS NOT NULL
+             ORDER BY inference_score DESC NULLS LAST LIMIT ${lim}`
+          );
+          result.disease_associations = diseases;
+          result.n_disease_associations = (diseases as unknown[]).length;
+        }
+
+        if (dtype === "pathways" || dtype === "all") {
+          const pathways = await ctx.db.query(
+            `SELECT mesh_id, chemical_name, pathway_name, pathway_id, p_value, corrected_p_value, gene_count
+             FROM ctd_chem_pathway
+             WHERE mesh_id IN (${foundMeshIds})
+             ORDER BY corrected_p_value ASC NULLS LAST LIMIT ${lim}`
+          );
+          result.enriched_pathways = pathways;
+          result.n_enriched_pathways = (pathways as unknown[]).length;
+        }
+
+        // Check NHANES/HHEAR coverage for the found chemicals
+        const foundChems = result.chemicals_found as Record<string, unknown>[];
+        const coverageNotes: string[] = [];
+        for (const fc of foundChems) {
+          const meshId = fc.mesh_id as string;
+          const mapped = CTD_BY_MESH.get(meshId);
+          if (mapped && mapped.length > 0) {
+            coverageNotes.push(`${fc.chemical_name}: NHANES vars ${mapped.flatMap(m => m.nhanes_vars).join(", ")} — EP-WAS + individual-level data available.`);
+          } else {
+            coverageNotes.push(`${fc.chemical_name}: NO NHANES/HHEAR code — CTD mechanistic data only. No population epidemiology available in ExposomeQL.`);
+          }
+        }
+        result.nhanes_coverage = coverageNotes;
+
+        result.note = "Direct CTD query — does not require NHANES or HHEAR mapping. If chemicals show 'NO NHANES/HHEAR code', only mechanistic (gene/disease/pathway) data is available, not population-level associations. Run 'npx tsx scripts/ctd-etl.ts --full' to load all CTD chemicals.";
+
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, bigintReplacer, 2) }] };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `CTD query error: ${(err as Error).message}. If chemical not found, try running: npx tsx scripts/ctd-etl.ts --full` }] };
+      }
+    }
+  );
+
+  // ── Tool: coverage_gap ──
+
+  server.tool(
+    "coverage_gap",
+    "Analyze the measurement coverage gap for a chemical class: which member chemicals are in NHANES (with EP-WAS), which are in HHEAR (with cohort data), which are in CTD only (mechanistic data), and which are unmeasured. Suggests measurable proxies for unmeasured chemicals. Use this when asked about chemicals that may not have NHANES biomonitoring (e.g., 'what can ExposomeQL tell me about microplastics?').",
+    {
+      chemical_class: z.string().describe("Chemical class or family (e.g., 'microplastics', 'PFAS', 'phthalates', 'flame retardants', 'pesticides')"),
+    },
+    async ({ chemical_class }) => {
+      const query = chemical_class.toLowerCase().replace(/'/g, "''");
+
+      try {
+        // Search CTD for chemicals matching this class
+        const ctdChemicals = await ctx.db.query(
+          `SELECT DISTINCT mesh_id, chemical_name, cas
+           FROM ctd_chem_gene
+           WHERE LOWER(chemical_name) LIKE '%${query}%'
+           UNION
+           SELECT DISTINCT mesh_id, chemical_name, cas
+           FROM ctd_chem_disease
+           WHERE LOWER(chemical_name) LIKE '%${query}%'
+           LIMIT 100`
+        ) as Record<string, unknown>[];
+
+        // Also check the chemical map for category matches
+        const mapMatches = CTD_CHEMICAL_MAP.filter(
+          (c) => c.category.toLowerCase().includes(query) ||
+                 c.chemical_name.toLowerCase().includes(query) ||
+                 (c.subcategory && c.subcategory.toLowerCase().includes(query))
+        );
+
+        // Categorize coverage
+        const inNhanes: { name: string; nhanes_vars: string[]; mesh_id: string }[] = [];
+        const inHhearOnly: { name: string; hhear_code: string; mesh_id: string }[] = [];
+        const inCtdOnly: { name: string; mesh_id: string; cas?: string }[] = [];
+
+        // From map matches (NHANES/HHEAR-mapped chemicals)
+        for (const m of mapMatches) {
+          if (m.nhanes_vars.length > 0) {
+            inNhanes.push({ name: m.chemical_name, nhanes_vars: m.nhanes_vars, mesh_id: m.mesh_id });
+          } else if (m.hhear_code) {
+            inHhearOnly.push({ name: m.chemical_name, hhear_code: m.hhear_code, mesh_id: m.mesh_id });
+          }
+        }
+
+        // From CTD matches (not in map)
+        const mappedMeshIds = new Set(mapMatches.map((m) => m.mesh_id));
+        for (const c of ctdChemicals) {
+          if (!mappedMeshIds.has(c.mesh_id as string)) {
+            inCtdOnly.push({ name: c.chemical_name as string, mesh_id: c.mesh_id as string, cas: c.cas as string | undefined });
+          }
+        }
+
+        // Get gene interaction counts for CTD-only chemicals
+        const ctdOnlyWithCounts: Record<string, unknown>[] = [];
+        for (const c of inCtdOnly.slice(0, 20)) {
+          const countResult = await ctx.db.query(
+            `SELECT COUNT(*)::INTEGER as n_genes FROM ctd_chem_gene WHERE mesh_id = '${c.mesh_id}' AND organism = 'Homo sapiens'`
+          );
+          ctdOnlyWithCounts.push({
+            ...c,
+            n_human_gene_interactions: (countResult as Record<string, unknown>[])[0]?.n_genes ?? 0,
+          });
+        }
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              chemical_class,
+              summary: {
+                total_ctd_chemicals_found: ctdChemicals.length + mapMatches.length,
+                in_nhanes_with_epwas: inNhanes.length,
+                in_hhear_cohorts: inHhearOnly.length,
+                in_ctd_only: inCtdOnly.length,
+              },
+              in_nhanes: inNhanes.length > 0 ? inNhanes : "None — no NHANES biomonitoring for this class",
+              in_hhear: inHhearOnly.length > 0 ? inHhearOnly : "None",
+              in_ctd_only: ctdOnlyWithCounts.length > 0 ? ctdOnlyWithCounts : "None found in CTD",
+              proxy_suggestion: inNhanes.length > 0
+                ? `For chemicals in this class without direct biomonitoring, consider using these measurable proxies from the same class: ${inNhanes.map(n => n.name).join(", ")}`
+                : "No measurable proxies available in NHANES for this chemical class.",
+              note: "Coverage tiers: (1) NHANES = full EP-WAS + individual-level survey-weighted analysis; (2) HHEAR = cohort biomonitoring, exposure characterization; (3) CTD only = gene/disease/pathway mechanistic data, no population epidemiology. Run 'npx tsx scripts/ctd-etl.ts --full' to expand CTD coverage beyond the 325 NHANES-mapped chemicals.",
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Coverage gap analysis error: ${(err as Error).message}` }] };
       }
     }
   );
@@ -7220,7 +7586,7 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
     }
   );
 
-  console.error(`[exposomeql] Registered 62 tools (6 Descriptive, 5 Bivariate, 6 EP-WAS, 8 Regression, 1 Reference Interval, 9 HHEAR, 6 Chemical/CTD, 4 Cross-cutting, 5 Nutrient, 5 Diagnostics, 2 Correlation, 2 Evidence, 1 Personal, 2 Diet, 3 Sensitivity/N-of-1, 2 Validation)`);
+  console.error(`[exposomeql] Registered 66 tools (6 Descriptive, 5 Bivariate, 6 EP-WAS, 8 Regression, 1 Reference Interval, 2 Mortality, 9 HHEAR, 8 Chemical/CTD, 4 Cross-cutting, 5 Nutrient, 5 Diagnostics, 2 Correlation, 2 Evidence, 1 Personal, 2 Diet, 3 Sensitivity/N-of-1, 2 Validation)`);
 }
 
 /** Find a cohort config by ID */

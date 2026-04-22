@@ -887,9 +887,9 @@ Nutrient RCT evidence: See `data/nutrient_rct_search_methodology.md` for sources
 | Descriptive Statistics | 6 | Survey-weighted means, prevalence, distributions, trends |
 | Bivariate Analysis | 5 | Conditional, crosstab, stratify, correlation, group comparison |
 | EP-WAS Search | 6 | Query 66.8M pre-computed associations (with Bonferroni + BH-FDR) |
-| Regression & Modeling | 7 | Flexible regression, dose-response, mediation, interaction |
+| Regression & Modeling (see expanded below) | — | — |
 | HHEAR Cohorts | 9 | 35+ cohort analytics, cross-cohort comparison |
-| Chemical & CTD | 6 | Chemical identity, gene interactions, pathways, triangulation |
+| Chemical & CTD (see expanded below) | — | — |
 | Cross-Cutting | 4 | Reverse triangulation, exposure profiles |
 | Nutrient Triangulation | 5 | RCT vs observational concordance, biomarker vs dietary |
 | Meta-Analytic Diagnostics | 5 | Simpson's paradox, secular trends, exposure comparison, confounder check |
@@ -899,7 +899,11 @@ Nutrient RCT evidence: See `data/nutrient_rct_search_methodology.md` for sources
 | Diet Assessment | 2 | DRI comparison, HEI diet quality scoring |
 | Sensitivity & N-of-1 | 3 | Reverse-causation sensitivity, measurement uncertainty, doppelganger matching |
 | Validation | 2 | ExWAS validation, NHANES variable validation |
-| **Total** | **60** | unique tool registrations |
+| Regression & Modeling | 8 | Flexible regression, dose-response, mediation, interaction, quantile regression |
+| Reference Intervals | 1 | Conditional reference ranges by age + sex via quantile regression |
+| Mortality | 2 | Pre-computed ExWAS on all-cause mortality (685 exposures), on-the-fly Cox PH |
+| Chemical & CTD (expanded) | 8 | Full CTD (3.1M gene interactions, all chemicals), direct query, coverage gap analysis |
+| **Total** | **66** | unique tool registrations |
 
 ### Correlation Structure Tools
 

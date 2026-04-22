@@ -61,7 +61,13 @@ export const ALIAS_MAP: Record<string, string | string[]> = {
 
   // Blood counts
   hemoglobin: "LBXHGB",
+  // CAUTION: LBXHCT is ambiguous in NHANES — it maps to BOTH Hematocrit (%)
+  // in the CBC tables (1999-2020) AND Hydroxycotinine (ng/mL) in the COT tables
+  // (2013-2018). The variable code was reused for a completely different analyte.
+  // When the user says "hematocrit", they mean the CBC version. For hydroxycotinine,
+  // use LBXHCTR or direct them to the COT table.
   hematocrit: "LBXHCT",
+  hydroxycotinine: "LBXHCT", // NOTE: same code collision — COT table only (2013+)
   "white blood cells": "LBXWBCSI",
   WBC: "LBXWBCSI",
   "red blood cells": "LBXRBCSI",
