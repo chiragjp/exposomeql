@@ -4,6 +4,7 @@ import { loadConfig } from "./config.js";
 import { DuckDBManager } from "./data/duckdb-manager.js";
 import { VariableResolver } from "./variables/variable-resolver.js";
 import { RExecutor } from "./r-bridge/r-executor.js";
+import { PythonExecutor } from "./python-bridge/python-executor.js";
 import { registerTools } from "./tools/index.js";
 import { registerResources } from "./resources/index.js";
 import type { AppContext } from "./types.js";
@@ -23,12 +24,24 @@ async function getContext(): Promise<AppContext> {
       const resolver = new VariableResolver(db);
       await resolver.initialize();
       const rExec = new RExecutor(config);
+      const pyExec = new PythonExecutor(config);
       const cohorts = await db.discoverCohorts(config.hhearDataDir);
-      cachedContext = { db, resolver, rExec, cohorts };
+      cachedContext = { db, resolver, rExec, pyExec, cohorts };
       console.error("[exposomeql] Server initialized with data from:", config.dataDir);
       if (cohorts.length > 0) {
         console.error(`[exposomeql] HHEAR cohorts available: ${cohorts.map(c => c.id).join(", ")}`);
       }
+      // Non-blocking Python dependency check
+      pyExec.checkPythonDependencies().then((missing) => {
+        if (missing === null) {
+          console.error("[exposomeql] WARNING: Python3 not found or failed to run. Python-backed tools (HHEAR cohort analytics) will fall back to R.");
+        } else if (missing.length > 0) {
+          console.error(`[exposomeql] WARNING: missing Python packages: ${missing.join(", ")}. Run: npm run setup-py`);
+        } else {
+          console.error("[exposomeql] Python dependencies OK");
+        }
+      });
+
       // Non-blocking R dependency check — warn but don't fail startup so SQL/EP-WAS
       // tools still work for users who haven't installed R packages yet.
       rExec.checkRDependencies().then((missing) => {

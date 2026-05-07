@@ -22,6 +22,7 @@
     "test:validate": "tsx scripts/validation-run.ts",
     "test:ci": "tsc --noEmit",
     "setup-r": "Rscript scripts/install-r-deps.R",
+    "setup-py": "pip install pandas numpy scipy statsmodels",
     "convert-data": "tsx scripts/convert-to-parquet.ts",
     "ctd-etl": "tsx scripts/ctd-etl.ts",
     "eval:run": "tsx eval/run.ts",

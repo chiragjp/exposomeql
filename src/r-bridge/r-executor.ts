@@ -213,17 +213,32 @@ export class RExecutor {
   }
 }
 
-/** Extract the script's JSON payload from raw stdout (R may emit startup noise first). */
+/** Extract the script's JSON payload from raw stdout (R may emit startup noise first).
+ *
+ *  If the R script's tryCatch emitted `{"error":"..."}` (e.g., a filter referenced
+ *  a column not in the merged table), surface it as a thrown Error so each tool's
+ *  catch block reports the real cause instead of silently dropping undefined fields
+ *  into the response. The pool worker intercepts `quit()`, so these errors otherwise
+ *  arrive as "successful" stdout and get destructured into nothing. */
 function parseRJsonOutput(stdout: string, scriptName: string): RResult {
   const jsonStart = stdout.indexOf("{");
   const jsonEnd = stdout.lastIndexOf("}");
+  let parsed: RResult | null = null;
   if (jsonStart !== -1 && jsonEnd > jsonStart) {
-    return JSON.parse(stdout.slice(jsonStart, jsonEnd + 1)) as RResult;
+    parsed = JSON.parse(stdout.slice(jsonStart, jsonEnd + 1)) as RResult;
+  } else {
+    const arrStart = stdout.indexOf("[");
+    const arrEnd = stdout.lastIndexOf("]");
+    if (arrStart !== -1 && arrEnd > arrStart) {
+      parsed = JSON.parse(stdout.slice(arrStart, arrEnd + 1)) as RResult;
+    }
   }
-  const arrStart = stdout.indexOf("[");
-  const arrEnd = stdout.lastIndexOf("]");
-  if (arrStart !== -1 && arrEnd > arrStart) {
-    return JSON.parse(stdout.slice(arrStart, arrEnd + 1)) as RResult;
+  if (!parsed) {
+    throw new Error(`No JSON in R output from ${scriptName}.\nstdout: ${stdout}`);
   }
-  throw new Error(`No JSON in R output from ${scriptName}.\nstdout: ${stdout}`);
+  const errField = (parsed as { error?: unknown }).error;
+  if (typeof errField === "string" && errField.length > 0) {
+    throw new Error(errField);
+  }
+  return parsed;
 }

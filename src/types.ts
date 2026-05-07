@@ -1,11 +1,13 @@
 import { DuckDBManager } from "./data/duckdb-manager.js";
 import { VariableResolver } from "./variables/variable-resolver.js";
 import { RExecutor } from "./r-bridge/r-executor.js";
+import { PythonExecutor } from "./python-bridge/python-executor.js";
 
 export interface AppContext {
   db: DuckDBManager;
   resolver: VariableResolver;
   rExec: RExecutor;
+  pyExec: PythonExecutor;
   cohorts: CohortConfig[];
 }
 
