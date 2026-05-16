@@ -80,7 +80,7 @@ tryCatch({
         for (s in cycles) {
           yr2s <- c("A"=1999,"B"=2001,"C"=2003,"D"=2005,"E"=2007,"F"=2009,"G"=2011,"H"=2013,"I"=2015,"J"=2017)
           yr <- yr2s[s]
-          tab_row <- tab_info[tab_info$Begin.Year == yr, ]
+          tab_row <- tab_info[!is.na(tab_info$Begin.Year) & tab_info$Begin.Year == yr, ]
           if (nrow(tab_row) > 0) {
             tab_name <- tab_row$Data.File.Name[1]
             extra <- tryCatch(DBI::dbReadTable(con, tab_name), error = function(e) NULL)

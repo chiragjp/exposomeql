@@ -127,6 +127,11 @@ export const ALIAS_MAP: Record<string, string | string[]> = {
   transferrin: "LBXTFR",
   "uric acid": "LBXSUA",
   "serum uric acid": "LBXSUA",
+  "HOMA-IR": "HOMA_IR",
+  "homa-ir": "HOMA_IR",
+  "homa ir": "HOMA_IR",
+  "insulin resistance": "HOMA_IR",
+  "HOMA": "HOMA_IR",
 
   // Thyroid
   TSH: "LBXTSH",

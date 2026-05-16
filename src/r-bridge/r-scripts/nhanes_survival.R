@@ -93,7 +93,7 @@ tryCatch({
         tinfo <- tinfo[!grepl("^P_", tinfo$Data.File.Name), ]
         if (nrow(tinfo) == 0) next
         yr <- yr_from_letter[s]
-        trow <- tinfo[tinfo$Begin.Year == yr, ]
+        trow <- tinfo[!is.na(tinfo$Begin.Year) & tinfo$Begin.Year == yr, ]
         if (nrow(trow) == 0) next
         extra <- tryCatch(DBI::dbReadTable(con, trow$Data.File.Name[1]), error = function(e) NULL)
         if (is.null(extra) || !(mv %in% names(extra)) || !("SEQN" %in% names(extra))) next
