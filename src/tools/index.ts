@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import type { AppContext, ResolveResult, CohortConfig } from "../types.js";
+import type { PhenotypeHandle, PhenotypeType } from "../derived/phenotype-registry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -319,18 +320,20 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
 
   server.tool(
     "nhanes_mean",
-    "Compute survey-weighted mean with 95% CI and design-corrected SE for an NHANES variable. Handles LOD detection, weight selection, and cycle pooling automatically. Returns the estimate plus reproducible R code.",
+    "Compute survey-weighted mean with 95% CI and design-corrected SE. Accepts an NHANES variable OR a derived-phenotype handle (phen_*) — the handle path returns weighted mean/SD/percentiles already computed in the materialized CSV. Handles LOD detection, weight selection, and cycle pooling automatically for variable inputs.",
     {
       variable: z
         .string()
+        .optional()
         .describe(
-          "NHANES variable name or natural language description (e.g., 'LBXBPB' or 'blood lead')"
+          "NHANES variable name or natural language description (e.g., 'LBXBPB' or 'blood lead'). Required unless phenotype_handle is supplied."
         ),
+      phenotype_handle: z.string().optional().describe("Derived-phenotype handle id or name."),
       subgroup: z
         .string()
         .optional()
         .describe(
-          "Subgroup filter expression (e.g., 'RIDAGEYR < 5' for children under 5)"
+          "Subgroup filter expression (e.g., 'RIDAGEYR < 5' for children under 5). Not supported on phenotype handles in v1."
         ),
       cycles: z
         .array(z.string())
@@ -339,9 +342,42 @@ export function registerTools(server: McpServer, ctx: AppContext): void {
           "Survey cycles to include (e.g., ['2017-2018']). Omit for most recent cycle."
         ),
     },
-    async ({ variable, subgroup, cycles }) => {
+    async ({ variable, phenotype_handle, subgroup, cycles }) => {
+      const handle = phenotype_handle ? ctx.phenotypes.resolve(phenotype_handle) : undefined;
+      if (phenotype_handle && !handle) {
+        return { content: [{ type: "text" as const, text: `No phenotype handle named "${phenotype_handle}".` }] };
+      }
+      if (handle) {
+        if (subgroup) {
+          return { content: [{ type: "text" as const, text: "Subgroup filtering on derived-phenotype handles is not supported in v1. Use phenotype_inspect to view the CSV path or rederive with the subgroup baked into a 'binarize'/'expression' recipe." }] };
+        }
+        const s = handle.summary as Record<string, unknown>;
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              phenotype_handle: handle.id,
+              name: handle.name,
+              recipe: handle.recipe,
+              type: handle.type,
+              n_unweighted: handle.n,
+              cycles_used: handle.cycles,
+              mean: s.weighted_mean ?? s.prevalence_weighted ?? null,
+              sd: s.weighted_sd ?? null,
+              percentiles: handle.type === "continuous" ? {
+                p5: s.p5, p25: s.p25, median: s.median, p75: s.p75, p95: s.p95,
+              } : undefined,
+              level_weighted_pct: s.level_weighted_pct ?? undefined,
+              n_cases: s.n_cases ?? undefined,
+              prevalence_weighted: s.prevalence_weighted ?? undefined,
+              data_source: handle.data_source,
+              note: "Stats are weighted using the pooled weight stored in the handle CSV. Use nhanes_model or nhanes_exwas with phenotype_handle for richer analyses.",
+            }, null, 2),
+          }],
+        };
+      }
       // 1. Resolve variable
-      const resolved = await ctx.resolver.resolve(variable);
+      const resolved = await ctx.resolver.resolve(variable!);
       if (!resolved.resolved) {
         return {
           content: [
@@ -1452,26 +1488,31 @@ disconnect_pewas_data(con)
 
   server.tool(
     "nhanes_exwas",
-    "Run a full Exposome-Wide Association Study: iterate over all exposures in a category against a single outcome. WARNING: This can take 5-30 minutes depending on the number of exposures.",
+    "Run a full Exposome-Wide Association Study: iterate over all exposures in a category against a single outcome. The outcome may be a NHANES variable OR a derived-phenotype handle (phen_*) produced by nhanes_phenotype_derive — enabling ExWAS against eGFR, MetS, HOMA-IR, Framingham 10-yr risk, or any custom formula. WARNING: this can take 5-30 minutes depending on number of exposures.",
     {
-      outcome: z.string().describe("Outcome phenotype variable or name"),
+      outcome: z.string().optional().describe("Outcome phenotype variable or name. Required unless phenotype_handle is supplied."),
+      phenotype_handle: z.string().optional().describe("Derived-phenotype handle id or name (from nhanes_phenotype_derive). Use this instead of `outcome` to ExWAS against a derived phenotype."),
       exposure_category: z
         .string()
         .optional()
         .describe("Exposure category to scan (e.g., 'metals', 'VOCs')"),
       cycles: z.array(z.string()).optional().describe("Survey cycles"),
     },
-    async ({ outcome, exposure_category, cycles }) => {
-      const ro = await ctx.resolver.resolve(outcome);
-      if (!ro.resolved) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Could not resolve outcome "${outcome}".`,
-            },
-          ],
-        };
+    async ({ outcome, phenotype_handle, exposure_category, cycles }) => {
+      const handle = phenotype_handle ? ctx.phenotypes.resolve(phenotype_handle) : undefined;
+      if (phenotype_handle && !handle) {
+        return { content: [{ type: "text" as const, text: `No phenotype handle named "${phenotype_handle}". Use phenotype_list to see available handles.` }] };
+      }
+      let resolvedOutcomeName = outcome ?? handle?.name ?? "derived_phenotype";
+      if (!handle) {
+        if (!outcome) {
+          return { content: [{ type: "text" as const, text: "Either outcome or phenotype_handle is required." }] };
+        }
+        const ro = await ctx.resolver.resolve(outcome);
+        if (!ro.resolved) {
+          return { content: [{ type: "text" as const, text: `Could not resolve outcome "${outcome}".` }] };
+        }
+        resolvedOutcomeName = ro.variable!.variableName;
       }
 
       // Query DuckDB for exposure list by category/subcategory
@@ -1524,19 +1565,41 @@ disconnect_pewas_data(con)
         }
 
         const series = mapCyclesToSeries(cycles);
-        const rResult = await ctx.rExec.execute(
-          "nhanes_exwas.R",
-          {
-            outcome: ro.variable!.variableName,
-            exposures,
-            cycles: series,
-          },
-          600000 // 10 minute timeout for ExWAS
-        );
-        const code = generateExwasCode(ro.variable!, { cycles });
+        let rResult: Record<string, unknown>;
+        let codeHint: string;
+        if (handle) {
+          rResult = await ctx.rExec.execute(
+            "nhanes_phenotype_handle_exwas.R",
+            {
+              phenotype_handle_csv: handle.csv_path,
+              outcome_name: handle.name,
+              phenotype_type: handle.type,
+              exposures,
+              id_column: handle.id_column,
+              weight_column: handle.weight_column,
+              psu_column: handle.psu_column,
+              strata_column: handle.strata_column,
+              has_survey_design: handle.has_survey_design,
+            },
+            600000,
+          ) as Record<string, unknown>;
+          codeHint = `# ExWAS against derived phenotype '${handle.name}' (recipe=${handle.recipe})\n# Outcome handle: ${handle.id} (${handle.n} participants, ${handle.cycles.join(",")})`;
+        } else {
+          rResult = await ctx.rExec.execute(
+            "nhanes_exwas.R",
+            {
+              outcome: resolvedOutcomeName,
+              exposures,
+              cycles: series,
+            },
+            600000,
+          ) as Record<string, unknown>;
+          const ro = await ctx.resolver.resolve(resolvedOutcomeName);
+          codeHint = generateExwasCode(ro.variable!, { cycles });
+        }
         return {
           content: [
-            { type: "text" as const, text: JSON.stringify({ ...(rResult as Record<string, unknown>), reproducible_code: code }, null, 2) },
+            { type: "text" as const, text: JSON.stringify({ ...rResult, reproducible_code: codeHint }, null, 2) },
           ],
         };
       } catch (err) {
@@ -1845,14 +1908,15 @@ disconnect_pewas_data(con)
 
   server.tool(
     "nhanes_model",
-    "Fit a flexible survey-weighted regression model with multiple predictors, optional restricted cubic splines, and interactions. Supports linear, logistic, and quantile regression.",
+    "Fit a flexible survey-weighted regression model with multiple predictors, optional restricted cubic splines, and interactions. The outcome may be a NHANES variable OR a derived-phenotype handle (phen_*) produced by nhanes_phenotype_derive — so you can model eGFR, MetS, Framingham risk, HOMA-IR, or any custom formula directly. Supports linear, logistic, and quantile regression (quantile only on NHANES-variable outcomes).",
     {
-      outcome: z.string().describe("Outcome variable"),
+      outcome: z.string().optional().describe("Outcome variable. Required unless phenotype_handle is supplied."),
+      phenotype_handle: z.string().optional().describe("Derived-phenotype handle id or name (from nhanes_phenotype_derive)."),
       predictors: z.array(z.string()).describe("Predictor variables"),
       model_type: z
         .enum(["linear", "logistic", "quantile"])
         .optional()
-        .describe("Model type (default: linear)"),
+        .describe("Model type (default: linear; auto-set to logistic for binary handles)"),
       splines: z
         .array(z.string())
         .optional()
@@ -1864,18 +1928,31 @@ disconnect_pewas_data(con)
         .optional()
         .describe("Pairs of variables to interact"),
       cycles: z.array(z.string()).optional().describe("Survey cycles"),
+      subgroup: z
+        .string()
+        .optional()
+        .describe("Subgroup filter as an R expression evaluated before fitting, e.g. \"RIAGENDR==1\" (males) or \"RIAGENDR==2\" (females). Fits the model within this subset only — call twice to compare strata. Not supported with phenotype_handle."),
     },
-    async ({ outcome, predictors, model_type, splines, interactions, cycles }) => {
-      const ro = await ctx.resolver.resolve(outcome);
-      if (!ro.resolved) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Could not resolve outcome "${outcome}".`,
-            },
-          ],
-        };
+    async ({ outcome, phenotype_handle, predictors, model_type, splines, interactions, cycles, subgroup }) => {
+      const handle = phenotype_handle ? ctx.phenotypes.resolve(phenotype_handle) : undefined;
+      if (phenotype_handle && !handle) {
+        return { content: [{ type: "text" as const, text: `No phenotype handle named "${phenotype_handle}". Use phenotype_list to see available handles.` }] };
+      }
+      if (!handle && !outcome) {
+        return { content: [{ type: "text" as const, text: "Either outcome or phenotype_handle is required." }] };
+      }
+      if (handle && model_type === "quantile") {
+        return { content: [{ type: "text" as const, text: "Quantile regression on derived-phenotype handles is not yet supported. Use linear or logistic." }] };
+      }
+      if (handle && subgroup) {
+        return { content: [{ type: "text" as const, text: "Subgroup filtering on derived-phenotype handles is not supported yet. Re-derive the handle with the subgroup baked into the recipe, or run on a NHANES-variable outcome." }] };
+      }
+      let ro: ResolveResult | null = null;
+      if (!handle) {
+        ro = await ctx.resolver.resolve(outcome!);
+        if (!ro.resolved) {
+          return { content: [{ type: "text" as const, text: `Could not resolve outcome "${outcome}".` }] };
+        }
       }
 
       const resolvedPredictors: string[] = [];
@@ -1938,27 +2015,49 @@ disconnect_pewas_data(con)
 
       const series = mapCyclesToSeries(cycles);
       try {
-        const rResult = await ctx.rExec.execute("nhanes_model.R", {
-          outcome: ro.variable!.variableName,
-          predictors: resolvedPredictors,
-          model_type: model_type ?? "linear",
-          splines: resolvedSplines,
-          interactions: resolvedInteractions,
-          cycles: series,
-        });
-        const predictorVars = await Promise.all(
-          resolvedPredictors.map(async (p) => {
-            const r = await ctx.resolver.resolve(p);
-            return r.variable!;
-          }),
-        );
-        const code = generateModelCode(ro.variable!, predictorVars, {
-          cycles,
-          family: model_type === "logistic" ? "binomial" : "gaussian",
-        });
+        let rResult: Record<string, unknown>;
+        let codeHint: string;
+        if (handle) {
+          rResult = await ctx.rExec.execute("nhanes_phenotype_handle_model.R", {
+            phenotype_handle_csv: handle.csv_path,
+            outcome_name: handle.name,
+            phenotype_type: handle.type,
+            predictors: resolvedPredictors,
+            model_type: model_type ?? (handle.type === "binary" ? "logistic" : "linear"),
+            splines: resolvedSplines,
+            interactions: resolvedInteractions,
+            id_column: handle.id_column,
+            weight_column: handle.weight_column,
+            psu_column: handle.psu_column,
+            strata_column: handle.strata_column,
+            has_survey_design: handle.has_survey_design,
+          }) as Record<string, unknown>;
+          codeHint = `# Regression on derived phenotype '${handle.name}' (recipe=${handle.recipe})\n# Outcome handle: ${handle.id} (${handle.n} participants, ${handle.cycles.join(",")})\n# Predictors: ${resolvedPredictors.join(", ")}`;
+        } else {
+          rResult = await ctx.rExec.execute("nhanes_model.R", {
+            outcome: ro!.variable!.variableName,
+            predictors: resolvedPredictors,
+            model_type: model_type ?? "linear",
+            splines: resolvedSplines,
+            interactions: resolvedInteractions,
+            cycles: series,
+            subgroup: subgroup ?? null,
+          }) as Record<string, unknown>;
+          const predictorVars = await Promise.all(
+            resolvedPredictors.map(async (p) => {
+              const r = await ctx.resolver.resolve(p);
+              return r.variable!;
+            }),
+          );
+          codeHint = generateModelCode(ro!.variable!, predictorVars, {
+            cycles,
+            family: model_type === "logistic" ? "binomial" : "gaussian",
+            subgroup,
+          });
+        }
         return {
           content: [
-            { type: "text" as const, text: JSON.stringify({ ...(rResult as Record<string, unknown>), reproducible_code: code }, null, 2) },
+            { type: "text" as const, text: JSON.stringify({ ...rResult, reproducible_code: codeHint }, null, 2) },
           ],
         };
       } catch (err) {
@@ -1992,8 +2091,12 @@ disconnect_pewas_data(con)
         .optional()
         .describe("Number of knots for RCS (3-10, default: 4)"),
       cycles: z.array(z.string()).optional().describe("Survey cycles"),
+      subgroup: z
+        .string()
+        .optional()
+        .describe("Subgroup filter as an R expression evaluated before fitting, e.g. \"RIAGENDR==1\" (males) or \"RIAGENDR==2\" (females). Fits the dose-response curve within this subset only — call twice to compare strata."),
     },
-    async ({ exposure, outcome, method, covariates, n_knots, cycles }) => {
+    async ({ exposure, outcome, method, covariates, n_knots, cycles, subgroup }) => {
       const re = await ctx.resolver.resolve(exposure);
       const ro = await ctx.resolver.resolve(outcome);
       if (!re.resolved || !ro.resolved) {
@@ -2037,6 +2140,7 @@ disconnect_pewas_data(con)
             covariates: resolvedCovariates,
             n_knots: n_knots ?? 4,
             cycles: series,
+            subgroup: subgroup ?? null,
           },
           120000
         );
@@ -2046,6 +2150,7 @@ disconnect_pewas_data(con)
         const code = generateModelCode(ro.variable!, [re.variable!, ...covVars], {
           cycles,
           doseResponse: true,
+          subgroup,
         });
         return {
           content: [
@@ -2510,8 +2615,10 @@ disconnect_pewas_data(con)
         .describe("NHANES cycles (default: 3 most recent with data)"),
       log_exposure: z.boolean().optional().default(true)
         .describe("Log10-transform and z-score the exposure (default: true)"),
+      subgroup: z.string().optional()
+        .describe("Subgroup filter as an R expression evaluated before fitting, e.g. \"RIAGENDR==1\" (males) or \"RIAGENDR==2\" (females). Fits a SEPARATE Cox model within this subset only — call twice to compare HRs across strata."),
     },
-    async ({ exposure, cause, covariates, cycles, log_exposure }) => {
+    async ({ exposure, cause, covariates, cycles, log_exposure, subgroup }) => {
       const eRes = await ctx.resolver.resolve(exposure);
       if (!eRes.resolved) {
         return { content: [{ type: "text" as const, text: eRes.candidates ? `Ambiguous exposure. Candidates:\n${formatCandidates(eRes)}` : `Exposure "${exposure}" not found.` }] };
@@ -2536,10 +2643,11 @@ disconnect_pewas_data(con)
           covariates: resolvedCovs,
           cycles: cycles ? mapCyclesToSeries(cycles) : null,
           log_exposure: log_exposure ?? true,
+          subgroup: subgroup ?? null,
         }, 120_000);
 
         const code = generateSurvivalCode(eRes.variable!, {
-          cycles, covariates: resolvedCovs, log_exposure, cause,
+          cycles, covariates: resolvedCovs, log_exposure, cause, subgroup,
         });
 
         return {
@@ -7766,7 +7874,1088 @@ disconnect_pewas_data(con)
     }
   );
 
-  console.error(`[exposomeql] Registered 66 tools (6 Descriptive, 5 Bivariate, 6 EP-WAS, 8 Regression, 1 Reference Interval, 2 Mortality, 9 HHEAR, 8 Chemical/CTD, 4 Cross-cutting, 5 Nutrient, 5 Diagnostics, 2 Correlation, 2 Evidence, 1 Personal, 2 Diet, 3 Sensitivity/N-of-1, 2 Validation)`);
+  registerPhenotypeDeriveTools(server, ctx);
+  registerVarianceDecomposition(server, ctx);
+  registerExposomeGlobe(server, ctx);
+  registerStratifiedExwas(server, ctx);
+  registerScatter(server, ctx);
+
+  console.error(`[exposomeql] Registered 74 tools (6 Descriptive, 5 Bivariate, 6 EP-WAS, 8 Regression, 1 Reference Interval, 2 Mortality, 9 HHEAR, 8 Chemical/CTD, 4 Cross-cutting, 5 Nutrient, 5 Diagnostics, 2 Correlation, 2 Evidence, 1 Personal, 2 Diet, 3 Sensitivity/N-of-1, 2 Validation, 4 Derived Phenotypes (incl. recipe_catalog), 1 Variance Decomposition, 1 Exposome Globe, 1 Stratified ExWAS, 1 Scatter)`);
+}
+
+const PHENOTYPE_RECIPES = [
+  "egfr_ckdepi",
+  "lipid_class_tc",
+  "lipid_class_ldl",
+  "lipid_class_hdl",
+  "lipid_class_tg",
+  "framingham_cvd_10yr",
+  "mets_atp3",
+  "homa_ir",
+  "homa_beta",
+  "fib4",
+  "aip",
+  "non_hdl_cholesterol",
+  "tg_hdl_ratio",
+  "tyg_index",
+  "vai",
+  "allostatic_load",
+  "liver_steatosis_cap",
+  "liver_steatosis_class",
+  "liver_fibrosis_lsm",
+  "liver_fibrosis_class",
+  "ascvd_10yr_risk",
+  "nafld_fibrosis_score",
+  "nafld_fibrosis_class",
+  "apri",
+  "tyg_bmi",
+  "tyg_wc",
+  "whtr",
+  "eag",
+  "whr",
+  "whr_class",
+  "ost_index",
+  "ost_class",
+  "frax_simplified",
+  "bilirubin_class",
+  "meld_classic",
+  "meld_xi",
+  "phq9_score",
+  "phq9_class",
+  "depression_screen_positive",
+  "frailty_index",
+  "frailty_class",
+  "expression",
+  "binarize",
+] as const;
+
+/** Structured catalog of every built-in recipe — exposed via the
+ *  phenotype_recipe_catalog tool so LLM clients can discover what's available
+ *  without parsing a long description string. */
+const PHENOTYPE_RECIPE_CATALOG: Array<{
+  id: string;
+  family: string;
+  type: "continuous" | "binary" | "ordinal" | "categorical" | "any";
+  description: string;
+  inputs: string[];
+  cycles: string;
+  cutpoints?: string;
+  reference: string;
+}> = [
+  // Renal
+  { id: "egfr_ckdepi", family: "renal", type: "continuous",
+    description: "Estimated glomerular filtration rate (race-free CKD-EPI 2021)",
+    inputs: ["LBXSCR", "RIDAGEYR", "RIAGENDR"], cycles: "all",
+    cutpoints: "<60 = CKD stage ≥3", reference: "Inker et al. NEJM 2021;385:1737" },
+
+  // Lipid
+  { id: "lipid_class_tc", family: "lipid", type: "ordinal",
+    description: "ATP III total cholesterol bins", inputs: ["LBXTC"], cycles: "all",
+    cutpoints: "<200 desirable, 200-239 borderline, ≥240 high", reference: "NCEP ATP III" },
+  { id: "lipid_class_ldl", family: "lipid", type: "ordinal",
+    description: "ATP III LDL bins (5 levels)", inputs: ["LBDLDL"], cycles: "2005+",
+    cutpoints: "<100 optimal ... ≥190 very high", reference: "NCEP ATP III" },
+  { id: "lipid_class_hdl", family: "lipid", type: "ordinal",
+    description: "HDL bins, sex-specific (3 levels)", inputs: ["LBDHDD", "RIAGENDR"], cycles: "2005+",
+    cutpoints: "M <40 / F <50 low; ≥60 high", reference: "NCEP ATP III" },
+  { id: "lipid_class_tg", family: "lipid", type: "ordinal",
+    description: "Triglyceride bins (4 levels)", inputs: ["LBXTR"], cycles: "all",
+    cutpoints: "<150 normal ... ≥500 very high", reference: "NCEP ATP III" },
+  { id: "non_hdl_cholesterol", family: "lipid", type: "continuous",
+    description: "Non-HDL cholesterol = TC − HDL", inputs: ["LBXTC", "LBDHDD"], cycles: "2005+",
+    cutpoints: "≥160 mg/dL elevated", reference: "AHA/ACC 2018" },
+  { id: "tg_hdl_ratio", family: "lipid", type: "continuous",
+    description: "TG / HDL ratio, cardiometabolic marker",
+    inputs: ["LBXSTR", "LBDHDD"], cycles: "2005+",
+    cutpoints: ">3 typically elevated risk", reference: "Hadaegh 2009" },
+  { id: "aip", family: "lipid", type: "continuous",
+    description: "Atherogenic index of plasma: log10(TG/HDL)",
+    inputs: ["LBXSTR", "LBDHDD"], cycles: "2005+",
+    cutpoints: "<0.11 low, 0.11-0.21 mid, >0.21 high CV risk",
+    reference: "Dobiasova & Frohlich 2001" },
+
+  // Cardiovascular risk
+  { id: "framingham_cvd_10yr", family: "cardio", type: "continuous",
+    description: "10-year general-CVD risk (D'Agostino 2008)",
+    inputs: ["LBXTC", "LBDHDD", "BPXSY1", "BPQ050A", "BPQ020", "SMQ020", "DIQ010", "RIDAGEYR", "RIAGENDR"],
+    cycles: "2005+", cutpoints: "≥10% intermediate, ≥20% high",
+    reference: "D'Agostino RB et al. Circulation 2008;117:743" },
+  { id: "ascvd_10yr_risk", family: "cardio", type: "continuous",
+    description: "Pooled Cohort Equations 10-yr ASCVD risk (race+sex-specific)",
+    inputs: ["LBXTC", "LBDHDD", "BPXSY1", "BPQ050A", "SMQ020/SMQ040", "DIQ010", "RIDAGEYR", "RIAGENDR", "RIDRETH3"],
+    cycles: "2005+, ages 40-79",
+    cutpoints: "<5% low, 5-7.5% borderline, 7.5-20% intermediate, ≥20% high",
+    reference: "Goff DC et al. Circulation 2014;129(25 Suppl 2):S49" },
+
+  // Metabolic syndrome / dysregulation
+  { id: "mets_atp3", family: "composite", type: "binary",
+    description: "Metabolic syndrome (ATP III, ≥3 of 5 criteria)",
+    inputs: ["BMXWAIST", "LBXSTR", "LBDHDD", "BPXSY1", "BPXDI1", "BPQ050A", "LBXGLU", "DIQ050", "RIAGENDR"],
+    cycles: "2005+, fasting subsample", reference: "NCEP ATP III" },
+  { id: "allostatic_load", family: "composite", type: "ordinal",
+    description: "8-component physiological dysregulation count",
+    inputs: ["BPXSY1", "BPXDI1", "BMXBMI", "BMXWAIST", "LBXGH", "LBXTC", "LBDHDD", "LBXCRP/LBXHSCRP"],
+    cycles: "varies (CRP gap 2011-2014)", reference: "McEwen-Seeman 1999; Crimmins 2003" },
+
+  // Glycemic / insulin resistance
+  { id: "homa_ir", family: "glycemic", type: "continuous",
+    description: "HOMA insulin resistance index", inputs: ["LBXGLU", "LBXIN"],
+    cycles: "fasting subsample", reference: "Matthews DR et al. Diabetologia 1985;28:412" },
+  { id: "homa_beta", family: "glycemic", type: "continuous",
+    description: "HOMA beta-cell function index", inputs: ["LBXGLU", "LBXIN"],
+    cycles: "fasting subsample", reference: "Matthews 1985" },
+  { id: "tyg_index", family: "glycemic", type: "continuous",
+    description: "ln(TG × glucose / 2), insulin-resistance surrogate",
+    inputs: ["LBXSTR", "LBXGLU"], cycles: "fasting subsample",
+    reference: "Simental-Mendia 2008" },
+  { id: "tyg_bmi", family: "glycemic", type: "continuous",
+    description: "TyG × BMI (anthropometry-augmented IR)",
+    inputs: ["LBXSTR", "LBXGLU", "BMXBMI"], cycles: "fasting subsample",
+    reference: "Er LK et al. PLoS One 2016" },
+  { id: "tyg_wc", family: "glycemic", type: "continuous",
+    description: "TyG × waist circumference",
+    inputs: ["LBXSTR", "LBXGLU", "BMXWAIST"], cycles: "fasting subsample",
+    reference: "Er LK et al. PLoS One 2016" },
+  { id: "eag", family: "glycemic", type: "continuous",
+    description: "Estimated average glucose from HbA1c", inputs: ["LBXGH"], cycles: "all",
+    cutpoints: "linear: 28.7·HbA1c% - 46.7", reference: "Nathan DM et al. Diabetes Care 2008;31:1473" },
+
+  // Adiposity
+  { id: "vai", family: "adiposity", type: "continuous",
+    description: "Visceral Adiposity Index, sex-specific",
+    inputs: ["BMXWAIST", "BMXBMI", "LBXSTR", "LBDHDD", "RIAGENDR"],
+    cycles: "2005+, fasting", reference: "Amato MC et al. Diabetes Care 2010;33:920" },
+  { id: "whtr", family: "adiposity", type: "continuous",
+    description: "Waist-to-height ratio",
+    inputs: ["BMXWAIST", "BMXHT"], cycles: "all",
+    cutpoints: ">0.5 elevated cardiometabolic risk",
+    reference: "Ashwell & Hsieh 2005" },
+  { id: "whr", family: "adiposity", type: "continuous",
+    description: "Waist-to-hip ratio",
+    inputs: ["BMXWAIST", "BMXHIP"], cycles: "cycle J only (2017-2018)",
+    cutpoints: "M ≥0.90, F ≥0.85 abdominal obesity",
+    reference: "WHO 2008" },
+  { id: "whr_class", family: "adiposity", type: "binary",
+    description: "WHR elevated-risk binary, sex-specific",
+    inputs: ["BMXWAIST", "BMXHIP", "RIAGENDR"], cycles: "cycle J only",
+    reference: "WHO 2008" },
+
+  // Liver — lab-based
+  { id: "fib4", family: "liver", type: "continuous",
+    description: "FIB-4 liver fibrosis score (age × AST / [plt × √ALT])",
+    inputs: ["RIDAGEYR", "LBXSASSI", "LBXSATSI", "LBXPLTSI"], cycles: "all",
+    cutpoints: "<1.3 rules out advanced; >2.67 suggests advanced fibrosis",
+    reference: "Sterling RK et al. Hepatology 2006;43:1317" },
+  { id: "apri", family: "liver", type: "continuous",
+    description: "AST-to-platelet ratio index",
+    inputs: ["LBXSASSI", "LBXPLTSI"], cycles: "all",
+    cutpoints: "<0.5 rules out significant fibrosis; >1.5 suggests cirrhosis",
+    reference: "Wai CT et al. Hepatology 2003;38:518" },
+  { id: "nafld_fibrosis_score", family: "liver", type: "continuous",
+    description: "Angulo 2007 NAFLD fibrosis score",
+    inputs: ["RIDAGEYR", "BMXBMI", "LBXGLU", "DIQ010", "LBXSASSI", "LBXSATSI", "LBXPLTSI", "LBXSAL"],
+    cycles: "all (LBXGLU fasting)",
+    cutpoints: "<-1.455 low; >0.676 high probability advanced fibrosis",
+    reference: "Angulo P et al. Hepatology 2007;45:846" },
+  { id: "nafld_fibrosis_class", family: "liver", type: "ordinal",
+    description: "NFS 3-level class (low / indeterminate / high)",
+    inputs: ["see nafld_fibrosis_score"], cycles: "all",
+    reference: "Angulo 2007" },
+  { id: "bilirubin_class", family: "liver", type: "ordinal",
+    description: "Total bilirubin clinical bins",
+    inputs: ["LBXSTB"], cycles: "all",
+    cutpoints: "<1.2 normal, 1.2-2 mild, 2-5 moderate, ≥5 marked",
+    reference: "Standard clinical reference ranges" },
+  { id: "meld_classic", family: "liver", type: "continuous",
+    description: "MELD score (Kamath 2001) with INR=1.0 stand-in for NHANES",
+    inputs: ["LBXSTB", "LBXSCR"], cycles: "all",
+    cutpoints: "≥15 transplant-listing range (clinical); rounded integer 6-40",
+    reference: "Kamath PS et al. Hepatology 2001;33:464; Wiesner R et al. Gastroenterology 2003;124:91" },
+  { id: "meld_xi", family: "liver", type: "continuous",
+    description: "MELD-XI (INR-free variant): 5.11·ln(bilirubin) + 11.76·ln(creatinine) + 9.44",
+    inputs: ["LBXSTB", "LBXSCR"], cycles: "all",
+    cutpoints: "designed for patients on anticoagulation; doubles as NHANES-compatible MELD",
+    reference: "Heuman DM et al. Hepatology 2008;48:1809" },
+
+  // Liver — FibroScan imaging
+  { id: "liver_steatosis_cap", family: "liver", type: "continuous",
+    description: "FibroScan controlled attenuation parameter (steatosis)",
+    inputs: ["LUXCAPM", "LUXCPIQR"], cycles: "cycle J only",
+    cutpoints: "<248 S0; 248-267 S1; 268-279 S2; ≥280 S3",
+    reference: "Karlas T et al. J Hepatol 2017;66:1022" },
+  { id: "liver_steatosis_class", family: "liver", type: "ordinal",
+    description: "S0/S1/S2/S3 steatosis class from CAP",
+    inputs: ["LUXCAPM", "LUXCPIQR"], cycles: "cycle J only",
+    reference: "Karlas 2017" },
+  { id: "liver_fibrosis_lsm", family: "liver", type: "continuous",
+    description: "FibroScan liver stiffness (kPa)",
+    inputs: ["LUXSMED", "LUXSIQRM", "LUXSIQR"], cycles: "cycle J only",
+    cutpoints: "<8.2 F0-F1; 8.2-9.7 F2; 9.7-13.6 F3; ≥13.6 F4 (NAFLD)",
+    reference: "Wong VW 2010; Boursier 2013" },
+  { id: "liver_fibrosis_class", family: "liver", type: "ordinal",
+    description: "F0-F4 fibrosis class from stiffness",
+    inputs: ["LUXSMED", "LUXSIQRM", "LUXSIQR"], cycles: "cycle J only",
+    reference: "Wong 2010; Boursier 2013" },
+
+  // Bone
+  { id: "ost_index", family: "bone", type: "continuous",
+    description: "Osteoporosis Self-Assessment Tool: 0.2·(weight - age)",
+    inputs: ["BMXWT", "RIDAGEYR"], cycles: "all",
+    cutpoints: "sex-specific (women high<-1, low>1; men high<-1, low>3)",
+    reference: "Koh LK 2001; Adler 2003 (men)" },
+  { id: "ost_class", family: "bone", type: "ordinal",
+    description: "OST 3-level risk class (low / moderate / high)",
+    inputs: ["BMXWT", "RIDAGEYR", "RIAGENDR"], cycles: "all",
+    reference: "Koh 2001; Adler 2003" },
+  { id: "frax_simplified", family: "bone", type: "continuous",
+    description: "FRAX-style 10-yr major-osteoporotic-fracture risk (Cox-PH approximation; NOT the proprietary Sheffield algorithm — see recipe_meta.frax_relation)",
+    inputs: ["RIDAGEYR", "RIAGENDR", "BMXBMI", "SMQ020/SMQ040", "DIQ010"],
+    cycles: "all, ages 40-90",
+    cutpoints: "10-yr probability; FRAX cutpoints typically ≥20% MOF or ≥3% hip warrant Rx",
+    reference: "Kanis 2007/8; Vestergaard 2006; Holroyd 2007; Schwartz 2011" },
+
+  // Mental health
+  { id: "phq9_score", family: "mental_health", type: "continuous",
+    description: "PHQ-9 depression severity score (0–27)",
+    inputs: ["DPQ010..DPQ090"], cycles: "2005-2018 (DPQ_D..DPQ_J)",
+    cutpoints: "0-4 minimal, 5-9 mild, 10-14 moderate, 15-19 mod-severe, 20-27 severe",
+    reference: "Kroenke K, Spitzer RL, Williams JB. J Gen Intern Med 2001;16:606-613" },
+  { id: "phq9_class", family: "mental_health", type: "ordinal",
+    description: "PHQ-9 5-level severity class",
+    inputs: ["DPQ010..DPQ090"], cycles: "2005-2018",
+    reference: "Kroenke 2001" },
+  { id: "depression_screen_positive", family: "mental_health", type: "binary",
+    description: "PHQ-9 ≥10 (clinically significant depression)",
+    inputs: ["DPQ010..DPQ090"], cycles: "2005-2018",
+    cutpoints: "sens 88% / spec 88% for major depression",
+    reference: "Kroenke 2001" },
+
+  // Frailty / aging
+  { id: "frailty_index", family: "composite", type: "continuous",
+    description: "Rockwood-style 12-deficit cumulative frailty index (0–1)",
+    inputs: ["MCQ010", "MCQ160A", "MCQ160B", "MCQ160C", "MCQ160E", "MCQ160F", "MCQ160L", "MCQ220", "DIQ010", "BPQ020", "BPQ080", "HUQ010"],
+    cycles: "all (where deficit vars present)",
+    cutpoints: "<0.10 robust; 0.10-0.21 pre-frail; 0.22-0.34 mild; ≥0.35 severe",
+    reference: "Rockwood K, Mitnitski A. J Gerontol A 2007;62:722; Searle SD et al. BMC Geriatr 2008;8:24; Blodgett J et al. JAMDA 2015 (NHANES adaptation)" },
+  { id: "frailty_class", family: "composite", type: "ordinal",
+    description: "Frailty 4-level class (robust / pre-frail / mild / severe)",
+    inputs: ["see frailty_index"], cycles: "all",
+    reference: "Rockwood 2007; Searle 2008" },
+
+  // Free-form
+  { id: "expression", family: "expression", type: "any",
+    description: "User-supplied Python expression over whitelisted variables. Requires `formula` + `source_variables`.",
+    inputs: ["user-specified via source_variables"], cycles: "any",
+    reference: "see nhanes_phenotype_derive params" },
+  { id: "binarize", family: "expression", type: "binary",
+    description: "Threshold/percentile binarization of a single variable. Requires `binarize` object.",
+    inputs: ["user-specified via binarize.variable"], cycles: "any",
+    reference: "see nhanes_phenotype_derive params" },
+];
+
+function registerPhenotypeDeriveTools(server: McpServer, ctx: AppContext): void {
+  server.tool(
+    "nhanes_phenotype_derive",
+    "Derive a new phenotype on-the-fly from a participant-level data source. Today it loads NHANES; the handle layer is source-agnostic so future cohort registrations (Framingham, HCHS, uploaded CSVs) will use the same recipe library and downstream tools. Built-in clinical recipes cover eGFR, lipid classes, Framingham 10-yr CVD risk, ATP III metabolic syndrome, and HOMA insulin-resistance / beta-cell indices; or pass a user-supplied formula. Returns a handle (phen_*) that downstream tools (nhanes_model, nhanes_exwas, nhanes_correlation, ...) accept anywhere they take an outcome/phenotype variable. Materialized values live in a per-process CSV so subsequent queries re-use them without recomputation.",
+    {
+      name: z.string().describe("Human-readable label for this phenotype (e.g. 'egfr_v1', 'high_TC')"),
+      recipe: z.enum(PHENOTYPE_RECIPES).describe(
+        "Built-in recipe id. For the full structured catalog (description, required inputs, cycle availability, cutpoints, references), call phenotype_recipe_catalog. Families: renal (egfr_ckdepi), lipid (lipid_class_*, non_hdl_cholesterol, tg_hdl_ratio, aip), cardio (framingham_cvd_10yr, ascvd_10yr_risk), composite (mets_atp3, allostatic_load), glycemic (homa_ir/beta, tyg_index/bmi/wc, eag), adiposity (vai, whtr, whr, whr_class), liver (fib4, apri, nafld_fibrosis_score/class, bilirubin_class, meld_classic, meld_xi, liver_steatosis_cap/class, liver_fibrosis_lsm/class), bone (ost_index/class, frax_simplified). Plus 'expression' (custom formula) and 'binarize' (threshold a variable)."
+      ),
+      formula: z.string().optional().describe(
+        "Required when recipe='expression'. Python expression over the variables listed in source_variables plus 'age', 'sex', 'sex_female'. Allowed math: np.where/log/log10/exp/sqrt/minimum/maximum/abs/power and the constants pi/True/False. Example: 'np.where(LBXSCH >= 240, 1, 0)' or 'LBXSCH / LBDHDD'."
+      ),
+      source_variables: z.array(z.string()).optional().describe(
+        "Required when recipe='expression'. NHANES variable codes that appear in the formula. They will be resolved and loaded across the requested cycles."
+      ),
+      binarize: z.object({
+        variable: z.string().describe("NHANES variable to threshold"),
+        method: z.enum(["threshold", "percentile"]).describe("threshold (absolute) or percentile (relative)"),
+        threshold: z.number().optional().describe("Required for method='threshold'"),
+        percentile: z.number().min(0).max(100).optional().describe("Required for method='percentile' (0-100)"),
+        direction: z.enum(["above", "below"]).optional().describe("Score 1 if value is above (default) or below the cutpoint"),
+      }).optional().describe("Required when recipe='binarize'."),
+      cycles: z.array(z.string()).optional().describe(
+        "NHANES cycles (year ranges like '2015-2016' or letters like 'I'). Default: all cycles A-J where required inputs exist."
+      ),
+    },
+    async ({ name, recipe, formula, source_variables, binarize, cycles }) => {
+      // Resolve any variable names the user passed (formula/binarize) so they match canonical NHANES codes
+      const resolvedSourceVars: string[] = [];
+      if (recipe === "expression") {
+        if (!formula) {
+          return { content: [{ type: "text" as const, text: "Error: recipe='expression' requires a formula." }] };
+        }
+        if (!source_variables || source_variables.length === 0) {
+          return { content: [{ type: "text" as const, text: "Error: recipe='expression' requires source_variables (the NHANES variables your formula references)." }] };
+        }
+        for (const v of source_variables) {
+          const r = await ctx.resolver.resolve(v);
+          if (!r.resolved) {
+            return { content: [{ type: "text" as const, text: `Could not resolve variable "${v}".\n${formatCandidates(r)}` }] };
+          }
+          resolvedSourceVars.push(r.variable!.variableName);
+        }
+      }
+      let resolvedBinarize = binarize;
+      if (recipe === "binarize") {
+        if (!binarize) {
+          return { content: [{ type: "text" as const, text: "Error: recipe='binarize' requires a binarize object." }] };
+        }
+        const rb = await ctx.resolver.resolve(binarize.variable);
+        if (!rb.resolved) {
+          return { content: [{ type: "text" as const, text: `Could not resolve binarize variable "${binarize.variable}".\n${formatCandidates(rb)}` }] };
+        }
+        resolvedBinarize = { ...binarize, variable: rb.variable!.variableName };
+      }
+
+      const series = mapCyclesToSeries(cycles);
+      const id = ctx.phenotypes.newId();
+      const out_csv = ctx.phenotypes.pathFor(id);
+
+      try {
+        const py = await ctx.pyExec.execute("nhanes_phenotype_derive.py", {
+          name,
+          recipe,
+          formula: formula ?? null,
+          source_variables: recipe === "expression" ? resolvedSourceVars : null,
+          binarize: recipe === "binarize" ? resolvedBinarize : null,
+          cycles: series ?? null,
+          out_csv,
+        });
+
+        const py_recipe = (py.recipe as string) ?? recipe;
+        const py_type = (py.type as PhenotypeType) ?? "continuous";
+        const py_src = (py.source_variables as string[]) ?? [];
+        const py_cycles = (py.cycles_used as string[]) ?? [];
+        const py_n = (py.n as number) ?? 0;
+        const py_summary = (py.summary as Record<string, unknown>) ?? {};
+        const py_meta = (py.recipe_meta as Record<string, unknown>) ?? {};
+        const py_preview = (py.preview as Array<Record<string, unknown>>) ?? [];
+
+        const handle: PhenotypeHandle = {
+          id,
+          name,
+          recipe: py_recipe,
+          type: py_type,
+          source_variables: py_src,
+          cycles: py_cycles,
+          n: py_n,
+          csv_path: out_csv,
+          summary: py_summary,
+          recipe_meta: py_meta,
+          created_at: Date.now(),
+          data_source: (py.data_source as string) ?? "nhanes",
+          has_survey_design: (py.has_survey_design as boolean) ?? true,
+          id_column: (py.id_column as string) ?? "SEQN",
+          weight_column: (py.weight_column as string | null) ?? "wt_pooled",
+          psu_column: (py.psu_column as string | null) ?? "SDMVPSU",
+          strata_column: (py.strata_column as string | null) ?? "SDMVSTRA",
+        };
+        ctx.phenotypes.put(handle);
+
+        const responseBody = {
+          handle_id: handle.id,
+          name: handle.name,
+          recipe: handle.recipe,
+          type: handle.type,
+          source_variables: handle.source_variables,
+          cycles_used: handle.cycles,
+          n: handle.n,
+          summary: handle.summary,
+          recipe_meta: handle.recipe_meta,
+          preview: py_preview,
+          skipped_cycles: py.skipped_cycles ?? null,
+          how_to_use: [
+            `Pass handle_id "${handle.id}" (or the name "${handle.name}") to downstream tools that accept a derived phenotype.`,
+            "v1: phenotype_inspect and phenotype_list let you re-fetch metadata. nhanes_model/nhanes_exwas integration is in progress (Task #4).",
+          ],
+        };
+
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(responseBody, bigintReplacer, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text" as const, text: `Error deriving phenotype: ${(err as Error).message}` }],
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "phenotype_list",
+    "List derived-phenotype handles created in this session. Returns id, name, recipe, type, n, source variables, and cycles used.",
+    {},
+    async () => {
+      const handles = ctx.phenotypes.list();
+      const body = {
+        n_handles: handles.length,
+        handles: handles.map((h) => ({
+          handle_id: h.id,
+          name: h.name,
+          recipe: h.recipe,
+          type: h.type,
+          n: h.n,
+          source_variables: h.source_variables,
+          cycles: h.cycles,
+          created_at: new Date(h.created_at).toISOString(),
+        })),
+      };
+      return { content: [{ type: "text" as const, text: JSON.stringify(body, bigintReplacer, 2) }] };
+    },
+  );
+
+  server.tool(
+    "phenotype_recipe_catalog",
+    "Browseable catalog of every built-in recipe in nhanes_phenotype_derive. Returns structured entries (id, family, output type, required NHANES variables, cycle availability, clinical-cutpoint summary, primary reference) so other agents can discover what's available without scraping a long description string. Optional family filter narrows by recipe family (renal, lipid, cardio, liver, glycemic, adiposity, bone, mental_health, composite).",
+    {
+      family: z.string().optional().describe("Filter by family: renal, lipid, cardio, liver, glycemic, adiposity, bone, composite, expression."),
+    },
+    async ({ family }) => {
+      const entries = PHENOTYPE_RECIPE_CATALOG.filter((e) =>
+        family ? e.family === family.toLowerCase() : true,
+      );
+      const families: Record<string, number> = {};
+      for (const e of PHENOTYPE_RECIPE_CATALOG) families[e.family] = (families[e.family] ?? 0) + 1;
+      const body = {
+        n_recipes_total: PHENOTYPE_RECIPE_CATALOG.length,
+        n_returned: entries.length,
+        families,
+        filter_applied: family ?? null,
+        catalog: entries,
+        usage: "Call nhanes_phenotype_derive with recipe=<id>. For 'expression', supply formula + source_variables. For 'binarize', supply binarize object.",
+      };
+      return { content: [{ type: "text" as const, text: JSON.stringify(body, bigintReplacer, 2) }] };
+    },
+  );
+
+  server.tool(
+    "phenotype_inspect",
+    "Show full metadata for one derived-phenotype handle: summary stats, recipe details, preview rows, and CSV path.",
+    {
+      handle: z.string().describe("Handle id (phen_*) or the name assigned when the phenotype was derived."),
+    },
+    async ({ handle }) => {
+      const h = ctx.phenotypes.resolve(handle);
+      if (!h) {
+        return { content: [{ type: "text" as const, text: `No phenotype handle named "${handle}". Use phenotype_list to see available handles.` }] };
+      }
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            handle_id: h.id,
+            name: h.name,
+            recipe: h.recipe,
+            type: h.type,
+            source_variables: h.source_variables,
+            cycles_used: h.cycles,
+            n: h.n,
+            summary: h.summary,
+            recipe_meta: h.recipe_meta,
+            csv_path: h.csv_path,
+            created_at: new Date(h.created_at).toISOString(),
+          }, bigintReplacer, 2),
+        }],
+      };
+    },
+  );
+}
+
+const DEFAULT_VARDECOMP_COVARIATES = [
+  "RIDAGEYR", "I(RIDAGEYR^2)", "RIAGENDR", "RIDRETH3", "INDFMPIR", "DMDEDUC2",
+];
+
+function registerVarianceDecomposition(server: McpServer, ctx: AppContext): void {
+  // KNOWN ISSUE (2026-05-19): matrix-decomposition errors observed on
+  // auto_top_k=20 against LBXGLU. Likely cause: collinearity in the
+  // auto-selected top-K exposures yields a singular MICE/lm design matrix.
+  // See nhanes_variance_decomposition.R header for mitigation options. The
+  // suggestion-chip for this case was pulled from the web app
+  // (exposomeqlweb/components/Chat.tsx) until the failure mode is fixed
+  // or the error message is made informative.
+  server.tool(
+    "nhanes_variance_decomposition",
+    "Compute the incremental R² (ΔR²) that a set of exposures adds on top of demographic covariates — the headline figure from the NMI paper's exposome-vs-genetic comparison. Outcome can be an NHANES variable OR a derived-phenotype handle (phen_*). Exposures are either supplied explicitly or auto-selected as the top-K by univariate R² from the EP-WAS catalog (NHANES outcomes) / by on-the-fly screen (handles — not implemented v1; pass exposures explicitly for now). Missing values are handled by MICE (predictive mean matching, m imputations); coefficients are pooled via Rubin's rules (mitools::MIcombine); R² is averaged across imputations. Continuous outcomes only. Known issue: auto_top_k against highly-correlated outcome panels (e.g. cardiometabolic) can fail with an opaque matrix-decomposition error when the imputed design matrix is singular — pass `exposures` explicitly or reduce `auto_top_k` if you hit this.",
+    {
+      outcome: z.string().optional().describe("NHANES outcome variable. Required unless phenotype_handle is supplied."),
+      phenotype_handle: z.string().optional().describe("Derived-phenotype handle id or name (from nhanes_phenotype_derive)."),
+      exposures: z.array(z.string()).optional().describe("Explicit list of exposure variables. Take precedence over auto_top_k."),
+      auto_top_k: z.number().int().min(1).max(50).optional().describe("Auto-select the top-K exposures by univariate R² from the EP-WAS catalog (model 6). Only works for NHANES outcomes in v1; for derived phenotypes, pass exposures explicitly."),
+      covariates: z.array(z.string()).optional().describe(`Baseline-model covariates. Default: ${DEFAULT_VARDECOMP_COVARIATES.join(", ")} (paper's model 6).`),
+      imputation: z.enum(["mice", "complete_case", "single_mice"]).optional().describe("mice (m chains + Rubin's rules), complete_case (no imputation, fast), or single_mice (1 chain). Default: mice."),
+      m: z.number().int().min(1).max(50).optional().describe("Number of MICE imputations. Default 5 (paper used 10)."),
+      maxit: z.number().int().min(1).max(50).optional().describe("MICE chain iterations. Default 5."),
+      cycles: z.array(z.string()).optional().describe("NHANES cycles. Default: all cycles available for the outcome."),
+    },
+    async ({ outcome, phenotype_handle, exposures, auto_top_k, covariates, imputation, m, maxit, cycles }) => {
+      const handle = phenotype_handle ? ctx.phenotypes.resolve(phenotype_handle) : undefined;
+      if (phenotype_handle && !handle) {
+        return { content: [{ type: "text" as const, text: `No phenotype handle named "${phenotype_handle}".` }] };
+      }
+      if (!handle && !outcome) {
+        return { content: [{ type: "text" as const, text: "Either outcome or phenotype_handle is required." }] };
+      }
+      if (handle && handle.type !== "continuous") {
+        return { content: [{ type: "text" as const, text: `Variance decomposition v1 supports continuous outcomes only. Handle '${handle.name}' is of type ${handle.type}.` }] };
+      }
+
+      // Resolve NHANES outcome if applicable
+      let outcomeVarName: string | null = null;
+      if (!handle) {
+        const ro = await ctx.resolver.resolve(outcome!);
+        if (!ro.resolved) {
+          return { content: [{ type: "text" as const, text: `Could not resolve outcome "${outcome}".` }] };
+        }
+        outcomeVarName = ro.variable!.variableName;
+      }
+
+      // Determine exposure list
+      let exposureList: string[];
+      if (exposures && exposures.length > 0) {
+        const resolved: string[] = [];
+        for (const e of exposures) {
+          const r = await ctx.resolver.resolve(e);
+          if (!r.resolved) {
+            return { content: [{ type: "text" as const, text: `Could not resolve exposure "${e}".` }] };
+          }
+          resolved.push(r.variable!.variableName);
+        }
+        exposureList = resolved;
+      } else if (auto_top_k) {
+        if (handle) {
+          return { content: [{ type: "text" as const, text: "auto_top_k for derived phenotypes is not yet implemented. Pass exposures explicitly for handle outcomes." }] };
+        }
+        // Query rsq_overall for top-K by adjusted R² (model 6). Dedupe per exposure
+        // since the catalog stores multiple rows per (exposure, phenotype) for
+        // different series/aggregate configurations.
+        const rows = await ctx.db.query<{ exposure: string; adj_r2: number }>(
+          `SELECT exposure, MAX("adj.r2") AS adj_r2
+           FROM pe_stats.rsq_overall
+           WHERE phenotype = $1 AND model_number = 6 AND log_e = 1 AND scaled_e = 1
+           GROUP BY exposure
+           ORDER BY adj_r2 DESC
+           LIMIT $2`,
+          outcomeVarName!,
+          auto_top_k,
+        );
+        if (rows.length === 0) {
+          return { content: [{ type: "text" as const, text: `No exposures in rsq_overall for phenotype '${outcomeVarName}'. Pass exposures explicitly.` }] };
+        }
+        exposureList = rows.map((r) => r.exposure);
+      } else {
+        return { content: [{ type: "text" as const, text: "Provide either `exposures` (explicit list) or `auto_top_k` (auto-select top-K from EP-WAS catalog)." }] };
+      }
+
+      const params: Record<string, unknown> = {
+        exposures: exposureList,
+        covariates: covariates ?? DEFAULT_VARDECOMP_COVARIATES,
+        imputation: imputation ?? "mice",
+        m: m ?? 5,
+        maxit: maxit ?? 5,
+        phenotype_type: "continuous",
+      };
+      if (handle) {
+        params.phenotype_handle_csv = handle.csv_path;
+        params.outcome_name = handle.name;
+        params.id_column = handle.id_column;
+        params.weight_column = handle.weight_column;
+        params.psu_column = handle.psu_column;
+        params.strata_column = handle.strata_column;
+        params.has_survey_design = handle.has_survey_design;
+      } else {
+        params.outcome = outcomeVarName;
+        params.outcome_name = outcomeVarName;
+        params.cycles = mapCyclesToSeries(cycles);
+        params.has_survey_design = true;
+      }
+
+      try {
+        const rResult = await ctx.rExec.execute(
+          "nhanes_variance_decomposition.R",
+          params,
+          600000, // 10 minute timeout — MICE on large frames can be slow
+        ) as Record<string, unknown>;
+
+        const codeHint = handle
+          ? `# Variance decomposition: ${handle.name} (recipe=${handle.recipe})\n# Exposures: ${exposureList.join(", ")}\n# Imputation: ${params.imputation} (m=${params.m})`
+          : `# Variance decomposition: ${outcomeVarName}\n# Exposures: ${exposureList.join(", ")}\n# Imputation: ${params.imputation} (m=${params.m})`;
+
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ ...rResult, reproducible_code: codeHint }, null, 2) }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }] };
+      }
+    },
+  );
+}
+
+function registerExposomeGlobe(server: McpServer, ctx: AppContext): void {
+  server.tool(
+    "exposome_globe",
+    "Build the partial-correlation exposome 'globe' — the signature visualization from the NMI paper. Returns a graph payload (nodes + edges + categories + circular layout hints) ready for force-directed rendering. Defaults match the paper: model_number=2 (demographic-adjusted partial correlation, ~420K pairs), |r|>0.25 edge threshold, Bonferroni-within-scan significance filter. Three anchor modes: (A) explicit `exposures` list; (B) `anchor_phenotype` — auto-pick top exposures associated with this phenotype (NHANES variable) by |EP-WAS β|; (C) `index_exposure` — start from one exposure and expand to its highly-correlated neighbors. Nodes are annotated with category/subcategory/degree/mean_abs_r and pre-assigned a layout angle clustered by subcategory.",
+    {
+      exposures: z.array(z.string()).optional()
+        .describe("Mode A: explicit list of exposure variable names (>=3)."),
+      anchor_phenotype: z.object({
+        phenotype: z.string(),
+        top_n: z.number().int().min(2).max(200).optional().describe("Number of top exposures to include (default 30)."),
+        use_bonferroni: z.boolean().optional().describe("If true, only include exposures whose |EP-WAS β| survives Bonferroni vs the catalog (matches paper). Default false (just top-N by |β|)."),
+      }).optional()
+        .describe("Mode B: anchor by a phenotype. Picks top exposures from pe_stats.adjusted_meta_uwls (model 6) then draws their partial-correlation globe."),
+      index_exposure: z.object({
+        exposure: z.string(),
+        anchor_threshold: z.number().min(0).max(1).optional().describe("Minimum |r| for an exposure to count as a neighbor of the index (default 0.25)."),
+        max_n: z.number().int().min(3).max(200).optional().describe("Maximum neighborhood size (default 40)."),
+      }).optional()
+        .describe("Mode C: build a neighborhood globe around one index exposure."),
+      threshold: z.number().min(0).max(1).optional()
+        .describe("Edge filter: include pair if |r| > threshold. Default 0.25 (paper)."),
+      model_number: z.number().int().min(1).max(2).optional()
+        .describe("1 = raw Pearson, 2 = demographic-adjusted partial (default; paper)."),
+      require_significance: z.boolean().optional()
+        .describe("Drop pairs that don't survive Bonferroni within the returned scan. Default true."),
+      max_edges: z.number().int().min(1).optional()
+        .describe("Cap the number of edges returned (top by |r|). Default 500."),
+    },
+    async ({ exposures, anchor_phenotype, index_exposure, threshold, model_number, require_significance, max_edges }) => {
+      const thr = threshold ?? 0.25;
+      const modelN = model_number ?? 2;
+      const reqSig = require_significance ?? true;
+      const edgeCap = max_edges ?? 500;
+
+      const modeCount = [exposures, anchor_phenotype, index_exposure].filter((x) => x).length;
+      if (modeCount === 0) {
+        return { content: [{ type: "text" as const, text: "Specify exactly one of: exposures, anchor_phenotype, or index_exposure." }] };
+      }
+      if (modeCount > 1) {
+        return { content: [{ type: "text" as const, text: "Specify only one anchor mode at a time." }] };
+      }
+
+      try {
+        // ── 1. Resolve the anchor exposure set ──
+        let anchorVars: string[] = [];
+        let mode: "explicit" | "phenotype_anchor" | "index_exposure" = "explicit";
+
+        if (exposures) {
+          mode = "explicit";
+          for (const e of exposures) {
+            const r = await ctx.resolver.resolve(e);
+            if (!r.resolved) {
+              return { content: [{ type: "text" as const, text: `Exposure "${e}" not found or ambiguous.` }] };
+            }
+            anchorVars.push(r.variable!.variableName);
+          }
+        } else if (anchor_phenotype) {
+          mode = "phenotype_anchor";
+          const r = await ctx.resolver.resolve(anchor_phenotype.phenotype);
+          if (!r.resolved) {
+            return { content: [{ type: "text" as const, text: `Phenotype "${anchor_phenotype.phenotype}" not found or ambiguous.` }] };
+          }
+          const topN = anchor_phenotype.top_n ?? 30;
+          const useBonf = anchor_phenotype.use_bonferroni ?? false;
+          const bonfThreshold = 3.02e-7; // catalog-wide threshold from CLAUDE.md / EPWAS_MULTIPLE_TESTING
+          const baseSql = `SELECT DISTINCT evarname
+             FROM pe_stats.adjusted_meta_uwls
+             WHERE expo_name='expo'
+               AND pvarname=$1
+               AND CAST(model_number AS INTEGER)=6
+               ${useBonf ? 'AND "p.value.uwls" < ' + bonfThreshold : ""}
+             ORDER BY ABS("estimate.uwls") DESC
+             LIMIT $2`;
+          const pickRows = await ctx.db.query(baseSql, r.variable!.variableName, topN);
+          anchorVars = (pickRows as Record<string, unknown>[]).map((row) => row.evarname as string);
+          if (anchorVars.length < 3) {
+            return { content: [{ type: "text" as const, text: `Only ${anchorVars.length} exposures found for phenotype '${anchor_phenotype.phenotype}'. Need ≥3. Try lowering use_bonferroni or increasing top_n.` }] };
+          }
+        } else if (index_exposure) {
+          mode = "index_exposure";
+          const r = await ctx.resolver.resolve(index_exposure.exposure);
+          if (!r.resolved) {
+            return { content: [{ type: "text" as const, text: `Index exposure "${index_exposure.exposure}" not found.` }] };
+          }
+          const idxVar = r.variable!.variableName;
+          const aThr = index_exposure.anchor_threshold ?? 0.25;
+          const maxN = index_exposure.max_n ?? 40;
+          const corrRows = await ctx.db.query(
+            `SELECT CASE WHEN xvarname=$1 THEN yvarname ELSE xvarname END AS partner,
+                    estimate
+             FROM ee_stats.adjusted_meta
+             WHERE (xvarname=$1 OR yvarname=$1)
+               AND CAST(model_number AS INTEGER)=$2
+               AND term='overall'
+               AND xvarname != yvarname
+             ORDER BY ABS(estimate) DESC`,
+            idxVar, modelN,
+          );
+          const seen = new Set<string>([idxVar]);
+          for (const row of corrRows as Record<string, unknown>[]) {
+            const partner = row.partner as string;
+            const est = Math.max(-1, Math.min(1, row.estimate as number));
+            if (Math.abs(est) > aThr && !seen.has(partner)) {
+              seen.add(partner);
+              if (seen.size >= maxN) break;
+            }
+          }
+          anchorVars = [...seen];
+        }
+
+        if (anchorVars.length < 3) {
+          return { content: [{ type: "text" as const, text: `Need at least 3 anchor exposures for a globe; got ${anchorVars.length}.` }] };
+        }
+
+        // ── 2. Pull pairwise partial correlations among the anchor set ──
+        const xPlaceholders = anchorVars.map((_, i) => `$${i + 2}`).join(",");
+        const yPlaceholders = anchorVars.map((_, i) => `$${i + 2 + anchorVars.length}`).join(",");
+        const sql = `
+          SELECT LEAST(xvarname, yvarname)    AS x,
+                 GREATEST(xvarname, yvarname) AS y,
+                 AVG(estimate)                AS estimate,
+                 MEDIAN("p.value")            AS p_value,
+                 MAX(nobs)                    AS n_obs
+          FROM ee_stats.adjusted_meta
+          WHERE CAST(model_number AS INTEGER) = $1
+            AND term = 'overall'
+            AND xvarname != yvarname
+            AND xvarname IN (${xPlaceholders})
+            AND yvarname IN (${yPlaceholders})
+          GROUP BY x, y
+          ORDER BY ABS(AVG(estimate)) DESC
+        `;
+        const queryParams = [modelN, ...anchorVars, ...anchorVars];
+        const pairRows = (await ctx.db.query(sql, ...queryParams)) as Record<string, unknown>[];
+
+        const nPairs = pairRows.length;
+        const bonfWithin = nPairs > 0 ? 0.05 / nPairs : 1;
+
+        let edges = pairRows
+          .map((row) => {
+            const est = row.estimate as number;
+            const clipped = Math.max(-1, Math.min(1, est));
+            return { row, clipped };
+          })
+          .filter(({ row, clipped }) => {
+            const p = row.p_value as number | null;
+            if (!Number.isFinite(clipped) || Math.abs(clipped) <= thr) return false;
+            if (reqSig && (p === null || !Number.isFinite(p) || p > bonfWithin)) return false;
+            return true;
+          })
+          .map(({ row, clipped }) => ({
+            source: row.x as string,
+            target: row.y as string,
+            r: Number(clipped.toFixed(4)),
+            abs_r: Number(Math.abs(clipped).toFixed(4)),
+            sign: clipped > 0 ? "positive" : "negative",
+            p_value: row.p_value as number | null,
+            n_obs: row.n_obs as number | null,
+          }));
+
+        if (edges.length > edgeCap) {
+          edges = edges.slice(0, edgeCap);
+        }
+
+        // ── 3. Collect node metadata (category, subcategory) ──
+        const nodeSet = new Set<string>();
+        for (const e of edges) { nodeSet.add(e.source); nodeSet.add(e.target); }
+        const nodeIds = [...nodeSet];
+        if (nodeIds.length === 0) {
+          return { content: [{ type: "text" as const, text: `No edges survived the |r|>${thr} threshold for the anchor set (${anchorVars.length} exposures, ${nPairs} pairs queried). Try lowering the threshold or disabling require_significance.` }] };
+        }
+
+        const catRows = await ctx.db.query(
+          `SELECT DISTINCT varname, category, subcategory
+           FROM pe_stats.variable_domain
+           WHERE varname IN (${nodeIds.map((_, i) => `$${i + 1}`).join(",")})`,
+          ...nodeIds,
+        ) as Record<string, unknown>[];
+        const catMap = new Map<string, { category: string | null; subcategory: string | null }>();
+        for (const row of catRows) {
+          const v = row.varname as string;
+          if (!catMap.has(v)) {
+            catMap.set(v, {
+              category: (row.category as string | null) ?? null,
+              subcategory: (row.subcategory as string | null) ?? null,
+            });
+          }
+        }
+
+        // Per-node aggregations
+        const degree = new Map<string, number>();
+        const sumAbsR = new Map<string, number>();
+        for (const e of edges) {
+          degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
+          degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
+          sumAbsR.set(e.source, (sumAbsR.get(e.source) ?? 0) + e.abs_r);
+          sumAbsR.set(e.target, (sumAbsR.get(e.target) ?? 0) + e.abs_r);
+        }
+
+        // Cluster nodes by subcategory for circular layout. Stable sort: subcategory, then id.
+        const nodeList = nodeIds.map((id) => {
+          const cat = catMap.get(id) ?? { category: null, subcategory: null };
+          return {
+            id,
+            description: ctx.resolver.get(id)?.description ?? id,
+            category: cat.category,
+            subcategory: cat.subcategory ?? "unclassified",
+            degree: degree.get(id) ?? 0,
+            mean_abs_r: Number(((sumAbsR.get(id) ?? 0) / Math.max(1, degree.get(id) ?? 1)).toFixed(4)),
+          };
+        });
+        nodeList.sort((a, b) =>
+          (a.subcategory ?? "").localeCompare(b.subcategory ?? "") || a.id.localeCompare(b.id),
+        );
+        // Assign circular angle in radians (0..2π), then add to each node
+        const nodes = nodeList.map((n, i) => ({
+          ...n,
+          layout_angle: Number(((2 * Math.PI * i) / nodeList.length).toFixed(6)),
+        }));
+
+        // Category legend with counts
+        const categoryCounts = new Map<string, number>();
+        for (const n of nodes) {
+          const k = n.subcategory ?? "unclassified";
+          categoryCounts.set(k, (categoryCounts.get(k) ?? 0) + 1);
+        }
+        const categories = [...categoryCounts.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([name, count]) => ({ name, count }));
+
+        // Summary stats
+        const meanR = edges.length === 0 ? 0 : edges.reduce((a, e) => a + e.r, 0) / edges.length;
+        const meanAbsR = edges.length === 0 ? 0 : edges.reduce((a, e) => a + e.abs_r, 0) / edges.length;
+        const positives = edges.filter((e) => e.r > 0).length;
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              mode,
+              anchor_exposures: anchorVars,
+              n_anchor: anchorVars.length,
+              filters: {
+                edge_threshold: thr,
+                require_bonferroni_within_scan: reqSig,
+                bonferroni_threshold: reqSig ? Number(bonfWithin.toExponential(3)) : null,
+                model_number: modelN,
+                model_description: modelN === 2
+                  ? "demographic-adjusted partial (age + age² + income + education + ethnicity)"
+                  : "raw Pearson (unadjusted)",
+              },
+              summary: {
+                n_nodes: nodes.length,
+                n_edges: edges.length,
+                n_pairs_queried: nPairs,
+                edges_truncated_at: edges.length === edgeCap ? edgeCap : null,
+                mean_r: Number(meanR.toFixed(4)),
+                mean_abs_r: Number(meanAbsR.toFixed(4)),
+                n_positive: positives,
+                n_negative: edges.length - positives,
+                n_subcategories: categories.length,
+              },
+              layout: {
+                type: "circular_by_subcategory",
+                description: "Each node has a layout_angle (radians) clustered by subcategory. Web renderer can use this as initial position, then run force-directed for relaxation.",
+              },
+              categories,
+              nodes,
+              edges,
+              note: "Edges from ee_stats.adjusted_meta (NHANES exposure-exposure pairwise associations). r is clipped to [-1, 1]. Defaults match the NMI paper's exposome globe (model_number=2 partial correlation, |r|>0.25, Bonferroni within scan).",
+            }, bigintReplacer, 2),
+          }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error building exposome globe: ${(err as Error).message}` }] };
+      }
+    },
+  );
+}
+
+function registerStratifiedExwas(server: McpServer, ctx: AppContext): void {
+  server.tool(
+    "nhanes_exwas_stratified",
+    "Stratified Exposome-Wide Association Study: run ExWAS within levels of a categorical modifier (sex, age tertile, race, or any custom NHANES variable) to find effect-heterogeneity hot spots. Each (exposure, stratum) cell fits its own survey-weighted regression (model-6 covariates excluding the stratifier itself); a separate pooled E×stratifier interaction model yields a clean interaction p ranked across all exposures. Outcome can be an NHANES variable or a derived-phenotype handle. Supports continuous + binary outcomes.",
+    {
+      outcome: z.string().optional().describe("NHANES outcome variable. Required unless phenotype_handle is supplied."),
+      phenotype_handle: z.string().optional().describe("Derived-phenotype handle id or name."),
+      stratify_by: z.enum(["sex", "age_tertile", "race"]).optional().describe(
+        "Stratifier preset. sex (RIAGENDR), age_tertile (weighted percentiles of RIDAGEYR), race (RIDRETH3 mapped to readable labels). Default sex."
+      ),
+      age_cuts: z.array(z.number()).optional().describe("Custom age cuts when stratify_by='age_tertile' (e.g., [40, 65]). Default: weighted 33rd/66th percentiles."),
+      exposures: z.array(z.string()).optional().describe("Explicit exposure list. Takes precedence over exposure_category."),
+      exposure_category: z.string().optional().describe("Exposure category to auto-scan (e.g., 'metals', 'phthalates')."),
+      cycles: z.array(z.string()).optional().describe("NHANES cycles."),
+    },
+    async ({ outcome, phenotype_handle, stratify_by, age_cuts, exposures, exposure_category, cycles }) => {
+      const handle = phenotype_handle ? ctx.phenotypes.resolve(phenotype_handle) : undefined;
+      if (phenotype_handle && !handle) {
+        return { content: [{ type: "text" as const, text: `No phenotype handle named "${phenotype_handle}".` }] };
+      }
+      if (!handle && !outcome) {
+        return { content: [{ type: "text" as const, text: "Either outcome or phenotype_handle is required." }] };
+      }
+
+      // Resolve NHANES outcome if applicable
+      let outcomeVarName: string | null = null;
+      if (!handle) {
+        const ro = await ctx.resolver.resolve(outcome!);
+        if (!ro.resolved) {
+          return { content: [{ type: "text" as const, text: `Could not resolve outcome "${outcome}".` }] };
+        }
+        outcomeVarName = ro.variable!.variableName;
+      }
+
+      // Resolve exposure list (explicit or auto from category)
+      let exposureList: string[];
+      if (exposures && exposures.length > 0) {
+        const resolved: string[] = [];
+        for (const e of exposures) {
+          const r = await ctx.resolver.resolve(e);
+          if (!r.resolved) {
+            return { content: [{ type: "text" as const, text: `Could not resolve exposure "${e}".` }] };
+          }
+          resolved.push(r.variable!.variableName);
+        }
+        exposureList = resolved;
+      } else {
+        const filter = exposure_category
+          ? `AND (subcategory LIKE '%${exposure_category}%' OR category LIKE '%${exposure_category}%')`
+          : "";
+        const rows = await ctx.db.query<{ varname: string }>(
+          `SELECT DISTINCT varname FROM pe_stats.variable_domain
+           WHERE epcf = 'e'
+             AND (varname LIKE 'LBX%' OR varname LIKE 'URX%')
+             AND varname NOT LIKE '%LC'
+             AND varname NOT LIKE '%SI'
+             AND varname NOT LIKE 'WT%'
+             ${filter}
+           ORDER BY varname`
+        );
+        if (rows.length === 0) {
+          return { content: [{ type: "text" as const, text: `No exposures found for category "${exposure_category ?? "(none)"}".` }] };
+        }
+        exposureList = rows.map((r) => r.varname);
+      }
+
+      const series = mapCyclesToSeries(cycles);
+      const rParams: Record<string, unknown> = {
+        exposures: exposureList,
+        stratify_by: stratify_by ?? "sex",
+        age_cuts: age_cuts ?? null,
+        phenotype_type: handle?.type ?? "continuous",
+      };
+      if (handle) {
+        rParams.phenotype_handle_csv = handle.csv_path;
+        rParams.outcome_name = handle.name;
+        rParams.id_column = handle.id_column;
+        rParams.weight_column = handle.weight_column;
+        rParams.psu_column = handle.psu_column;
+        rParams.strata_column = handle.strata_column;
+        rParams.has_survey_design = handle.has_survey_design;
+      } else {
+        rParams.outcome = outcomeVarName;
+        rParams.outcome_name = outcomeVarName;
+        rParams.cycles = series;
+        rParams.has_survey_design = true;
+      }
+
+      try {
+        const rResult = await ctx.rExec.execute(
+          "nhanes_exwas_stratified.R",
+          rParams,
+          900000, // 15 min — many fits per exposure
+        ) as Record<string, unknown>;
+        const codeHint = handle
+          ? `# Stratified ExWAS: ${handle.name} by ${stratify_by ?? "sex"}\n# ${exposureList.length} exposures × ${handle.n} participants`
+          : `# Stratified ExWAS: ${outcomeVarName} by ${stratify_by ?? "sex"}\n# ${exposureList.length} exposures`;
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ ...rResult, reproducible_code: codeHint }, null, 2) }],
+        };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }] };
+      }
+    },
+  );
+}
+
+function registerScatter(server: McpServer, ctx: AppContext): void {
+  server.tool(
+    "nhanes_scatter",
+    "Exposure × phenotype scatter on participant-level data. Continuous outcomes return subsampled raw points (capped at n_points) plus a LOESS smoother with 95% CI ribbon. Binary outcomes return a logistic-fit predicted-probability curve plus decile-binned empirical probabilities with binomial 95% CIs (real-scale visualization of the dose-response). Outcome can be a NHANES variable OR a derived-phenotype handle. Continuous exposures are log10-transformed (paper convention). Optional `adjust_for` covariates: for continuous outcomes, y is residualized on the covariates (Frisch-Waugh-Lovell) so the smoother shows the dose-response net of those confounders; for binary outcomes, the logistic curve is the marginal predicted probability with covariates held at their representative value.",
+    {
+      exposure: z.string().describe("NHANES exposure variable name."),
+      outcome: z.string().optional().describe("NHANES outcome variable. Required unless phenotype_handle is supplied."),
+      phenotype_handle: z.string().optional().describe("Derived-phenotype handle id or name."),
+      cycles: z.array(z.string()).optional().describe("NHANES cycles."),
+      adjust_for: z.array(z.string()).optional().describe(
+        "Covariates to adjust for. For continuous outcomes this residualizes y on the covariates; for binary outcomes it adds them to the logistic model and the predicted-probability curve holds them at their median (continuous) or mode (factor). Example: ['RIDAGEYR','RIAGENDR','RIDRETH3']."
+      ),
+      n_points: z.number().int().min(100).max(5000).optional().describe("Maximum subsampled scatter points. Default 1500."),
+      n_grid: z.number().int().min(20).max(500).optional().describe("Number of grid points for the fit curve. Default 100."),
+    },
+    async ({ exposure, outcome, phenotype_handle, cycles, adjust_for, n_points, n_grid }) => {
+      const handle = phenotype_handle ? ctx.phenotypes.resolve(phenotype_handle) : undefined;
+      if (phenotype_handle && !handle) {
+        return { content: [{ type: "text" as const, text: `No phenotype handle named "${phenotype_handle}".` }] };
+      }
+      if (!handle && !outcome) {
+        return { content: [{ type: "text" as const, text: "Either outcome or phenotype_handle is required." }] };
+      }
+      const re = await ctx.resolver.resolve(exposure);
+      if (!re.resolved) {
+        return { content: [{ type: "text" as const, text: `Could not resolve exposure "${exposure}".` }] };
+      }
+      let outcomeVarName: string | null = null;
+      if (!handle) {
+        const ro = await ctx.resolver.resolve(outcome!);
+        if (!ro.resolved) {
+          return { content: [{ type: "text" as const, text: `Could not resolve outcome "${outcome}".` }] };
+        }
+        outcomeVarName = ro.variable!.variableName;
+      }
+
+      // Resolve adjust_for variable names via the resolver so user-friendly inputs work.
+      const resolvedAdjustFor: string[] = [];
+      if (adjust_for && adjust_for.length > 0) {
+        for (const v of adjust_for) {
+          const r = await ctx.resolver.resolve(v);
+          if (!r.resolved) {
+            return { content: [{ type: "text" as const, text: `Could not resolve adjustment variable "${v}".` }] };
+          }
+          resolvedAdjustFor.push(r.variable!.variableName);
+        }
+      }
+
+      const params: Record<string, unknown> = {
+        exposure: re.variable!.variableName,
+        phenotype_type: handle?.type ?? "continuous",
+        n_points: n_points ?? 1500,
+        n_grid: n_grid ?? 100,
+        adjust_for: resolvedAdjustFor.length > 0 ? resolvedAdjustFor : null,
+      };
+      if (handle) {
+        params.phenotype_handle_csv = handle.csv_path;
+        params.outcome_name = handle.name;
+        params.id_column = handle.id_column;
+      } else {
+        params.outcome = outcomeVarName;
+        params.outcome_name = outcomeVarName;
+        params.cycles = mapCyclesToSeries(cycles);
+      }
+
+      try {
+        const rResult = await ctx.rExec.execute(
+          "nhanes_scatter.R",
+          params,
+          120000,
+        ) as Record<string, unknown>;
+        return { content: [{ type: "text" as const, text: JSON.stringify(rResult, null, 2) }] };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }] };
+      }
+    },
+  );
 }
 
 /** Find a cohort config by ID */

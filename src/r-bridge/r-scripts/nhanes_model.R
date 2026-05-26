@@ -33,27 +33,43 @@ model_type <- params$model_type    # "linear", "logistic", "quantile"
 spline_vars <- params$splines      # character vector or NULL
 interactions <- params$interactions # list of 2-element vectors or NULL
 cycles <- params$cycles
+subgroup <- params$subgroup        # R expression string for filtering, or NULL
 
 if (is.null(model_type)) model_type <- "linear"
 
 con <- connect_pewas_data(db_path)
 # on.exit removed for pool compatibility; cleanup handled in tryCatch finally
 
+# Primary exposure = first predictor. Loaded alongside the outcome (and DEMO) so
+# get_tables() inner-joins the exposure's table and figure_out_weight() picks the
+# correct (possibly subsample) weight rather than defaulting to WTMEC2YR.
+primary_exposure <- if (length(predictors) >= 1) predictors[[1]] else outcome_var
+
 if (is.null(cycles)) {
-  tab_info <- get_table_names_for_varname(con, outcome_var)
   yr2s <- c("1999"="A","2001"="B","2003"="C","2005"="D","2007"="E","2009"="F","2011"="G","2013"="H","2015"="I","2017"="J")
-  cycles <- tail(sort(unique(yr2s[as.character(tab_info$Begin.Year)])), 1)
+  out_cycles <- unique(yr2s[as.character(get_table_names_for_varname(con, outcome_var)$Begin.Year)])
+  out_cycles <- out_cycles[!is.na(out_cycles)]
+  expo_cycles <- if (!identical(primary_exposure, outcome_var)) {
+    ec <- unique(yr2s[as.character(get_table_names_for_varname(con, primary_exposure)$Begin.Year)])
+    ec[!is.na(ec)]
+  } else out_cycles
+  # Default to the most recent cycle the outcome AND exposure actually share, so
+  # we don't pick a cycle (e.g. the outcome's latest) where the exposure is absent.
+  shared <- intersect(out_cycles, expo_cycles)
+  cycles <- if (length(shared) > 0) tail(sort(shared), 1) else tail(sort(out_cycles), 1)
 }
 
 tryCatch({
   all_vars <- unique(c(outcome_var, predictors))
 
-  # Load data — use outcome for both args to ensure DEMO+outcome table are loaded
-  # Additional predictor tables loaded via the extra-table mechanism below
+  # Load data via get_tables(outcome, primary_exposure): inner-joins the outcome
+  # table, the exposure table, and DEMO, and lets figure_out_weight pick the right
+  # survey weight (incl. subsample weights such as WTSx2YR for PFAS). Any remaining
+  # predictors (extra covariates) are added by the extra-table merge below.
   all_data <- NULL
   for (s in cycles) {
     tab_obj <- tryCatch(
-      get_tables(outcome_var, outcome_var, s, con),
+      get_tables(outcome_var, primary_exposure, s, con),
       error = function(e) NULL
     )
     if (is.null(tab_obj)) next
@@ -84,17 +100,24 @@ tryCatch({
         # different weight scheme (WTMECPRP) and cannot be pooled with A–J cycles.
         tab_info <- tab_info[!grepl("^P_", tab_info$Data.File.Name), ]
         if (nrow(tab_info) == 0) next
+        # Gather this variable across ALL requested cycles first, then merge once.
+        # Merging per-cycle into the already-pooled frame makes base::merge rename
+        # the column to <var>.x/<var>.y on the 2nd cycle, silently dropping it.
+        add_df <- NULL
         for (s in cycles) {
           yr2s <- c("A"=1999,"B"=2001,"C"=2003,"D"=2005,"E"=2007,"F"=2009,"G"=2011,"H"=2013,"I"=2015,"J"=2017)
           yr <- yr2s[s]
           tab_row <- tab_info[!is.na(tab_info$Begin.Year) & tab_info$Begin.Year == yr, ]
-          if (nrow(tab_row) > 0) {
-            tab_name <- tab_row$Data.File.Name[1]
-            extra <- tryCatch(DBI::dbReadTable(con, tab_name), error = function(e) NULL)
-            if (!is.null(extra) && mv %in% names(extra) && "SEQN" %in% names(extra)) {
-              all_data <- merge(all_data, extra[, c("SEQN", mv), drop = FALSE], by = "SEQN", all.x = TRUE)
-            }
-          }
+          if (nrow(tab_row) == 0) next
+          tab_name <- tab_row$Data.File.Name[1]
+          extra <- tryCatch(DBI::dbReadTable(con, tab_name), error = function(e) NULL)
+          if (is.null(extra) || !(mv %in% names(extra)) || !("SEQN" %in% names(extra))) next
+          piece <- extra[, c("SEQN", mv), drop = FALSE]
+          add_df <- if (is.null(add_df)) piece else rbind(add_df, piece)
+        }
+        if (!is.null(add_df)) {
+          add_df <- add_df[!duplicated(add_df$SEQN), , drop = FALSE]
+          all_data <- merge(all_data, add_df, by = "SEQN", all.x = TRUE)
         }
       }
     }
@@ -110,6 +133,12 @@ tryCatch({
   dat <- all_data %>% filter(!is.na(wt), wt > 0)
   for (v in all_vars) {
     dat <- dat %>% filter(!is.na(.data[[v]]))
+  }
+
+  # Apply subgroup filter if specified (e.g. "RIAGENDR==1" for a sex-stratified fit).
+  # Evaluated before the survey design is built so SEs reflect the subset.
+  if (!is.null(subgroup) && nzchar(subgroup)) {
+    dat <- dat %>% filter(eval(parse(text = subgroup)))
   }
 
   # Adjust weights for multi-cycle pooling
@@ -246,6 +275,7 @@ tryCatch({
     formula = formula_str,
     n = nrow(dat),
     cycles_used = cycles,
+    subgroup = subgroup,
     coefficients = coefs,
     fit_statistics = fit_stats,
     splines_used = spline_vars,

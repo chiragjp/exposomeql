@@ -2,6 +2,7 @@ import { DuckDBManager } from "./data/duckdb-manager.js";
 import { VariableResolver } from "./variables/variable-resolver.js";
 import { RExecutor } from "./r-bridge/r-executor.js";
 import { PythonExecutor } from "./python-bridge/python-executor.js";
+import { PhenotypeRegistry } from "./derived/phenotype-registry.js";
 
 export interface AppContext {
   db: DuckDBManager;
@@ -9,6 +10,7 @@ export interface AppContext {
   rExec: RExecutor;
   pyExec: PythonExecutor;
   cohorts: CohortConfig[];
+  phenotypes: PhenotypeRegistry;
 }
 
 /** HHEAR cohort configuration — one per study directory */

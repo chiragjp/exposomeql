@@ -73,17 +73,24 @@ tryCatch({
     for (mv in missing_vars) {
       tab_info <- tryCatch(get_table_names_for_varname(con, mv), error = function(e) NULL)
       if (!is.null(tab_info) && nrow(tab_info) > 0) {
+        # Stack the variable across all cycles first, then merge once. Merging
+        # per-cycle into the pooled frame renames the column to <var>.x/.y on the
+        # 2nd cycle (base::merge dup-name suffixes), dropping it entirely.
+        add_df <- NULL
         for (s in cycles) {
           yr2s <- c("A"=1999,"B"=2001,"C"=2003,"D"=2005,"E"=2007,"F"=2009,"G"=2011,"H"=2013,"I"=2015,"J"=2017)
           yr <- yr2s[s]
           tab_row <- tab_info[!is.na(tab_info$Begin.Year) & tab_info$Begin.Year == yr, ]
-          if (nrow(tab_row) > 0) {
-            tab_name <- tab_row$Data.File.Name[1]  # Already the full table name
-            extra <- tryCatch(DBI::dbReadTable(con, tab_name), error = function(e) NULL)
-            if (!is.null(extra) && mv %in% names(extra) && "SEQN" %in% names(extra)) {
-              all_data <- merge(all_data, extra[, c("SEQN", mv), drop = FALSE], by = "SEQN", all.x = TRUE)
-            }
-          }
+          if (nrow(tab_row) == 0) next
+          tab_name <- tab_row$Data.File.Name[1]
+          extra <- tryCatch(DBI::dbReadTable(con, tab_name), error = function(e) NULL)
+          if (is.null(extra) || !(mv %in% names(extra)) || !("SEQN" %in% names(extra))) next
+          piece <- extra[, c("SEQN", mv), drop = FALSE]
+          add_df <- if (is.null(add_df)) piece else rbind(add_df, piece)
+        }
+        if (!is.null(add_df)) {
+          add_df <- add_df[!duplicated(add_df$SEQN), , drop = FALSE]
+          all_data <- merge(all_data, add_df, by = "SEQN", all.x = TRUE)
         }
       }
     }

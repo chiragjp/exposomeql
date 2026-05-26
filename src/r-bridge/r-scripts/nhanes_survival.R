@@ -35,6 +35,7 @@ covariates   <- if (!is.null(params$covariates)) as.character(unlist(params$cova
 cycles       <- if (!is.null(params$cycles)) as.character(unlist(params$cycles)) else NULL
 log_exposure <- params$log_exposure      # TRUE/FALSE, default TRUE
 time_variable <- params$time_variable    # "permth_int" (default) or "permth_exm"
+subgroup     <- params$subgroup          # R expression string for filtering, or NULL
 
 if (is.null(log_exposure)) log_exposure <- TRUE
 if (is.null(time_variable)) time_variable <- "permth_int"
@@ -160,6 +161,16 @@ tryCatch({
   pooled <- pooled[complete.cases(pooled[, required, drop = FALSE]), ]
   pooled <- pooled[pooled$wt > 0, ]
 
+  # Apply subgroup filter if specified (e.g. "RIAGENDR==1" for a males-only Cox
+  # model) — fits a SEPARATE survival model within this subset. RIAGENDR and
+  # other demographics are present via the DEMO join in get_tables(). NA rows
+  # under the filter expression are dropped.
+  if (!is.null(subgroup) && nzchar(subgroup)) {
+    keep <- with(pooled, eval(parse(text = subgroup)))
+    keep[is.na(keep)] <- FALSE
+    pooled <- pooled[keep, , drop = FALSE]
+  }
+
   n_events <- sum(pooled$event == 1)
   n_total <- nrow(pooled)
 
@@ -195,6 +206,7 @@ tryCatch({
   output <- list(
     exposure = exposure,
     cause = cause,
+    subgroup = subgroup,
     exposure_transform = expo_transform,
     n = n_total,
     n_events = n_events,

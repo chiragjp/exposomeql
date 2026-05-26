@@ -5,6 +5,7 @@ import { DuckDBManager } from "./data/duckdb-manager.js";
 import { VariableResolver } from "./variables/variable-resolver.js";
 import { RExecutor } from "./r-bridge/r-executor.js";
 import { PythonExecutor } from "./python-bridge/python-executor.js";
+import { PhenotypeRegistry } from "./derived/phenotype-registry.js";
 import { registerTools } from "./tools/index.js";
 import { registerResources } from "./resources/index.js";
 import type { AppContext } from "./types.js";
@@ -26,7 +27,8 @@ async function getContext(): Promise<AppContext> {
       const rExec = new RExecutor(config);
       const pyExec = new PythonExecutor(config);
       const cohorts = await db.discoverCohorts(config.hhearDataDir);
-      cachedContext = { db, resolver, rExec, pyExec, cohorts };
+      const phenotypes = new PhenotypeRegistry();
+      cachedContext = { db, resolver, rExec, pyExec, cohorts, phenotypes };
       console.error("[exposomeql] Server initialized with data from:", config.dataDir);
       if (cohorts.length > 0) {
         console.error(`[exposomeql] HHEAR cohorts available: ${cohorts.map(c => c.id).join(", ")}`);

@@ -322,7 +322,7 @@ ${R_FOOTER}
 export function generateModelCode(
   outcome: VariableEntry,
   predictors: VariableEntry[],
-  params: { cycles?: string[]; family?: string; doseResponse?: boolean },
+  params: { cycles?: string[]; family?: string; doseResponse?: boolean; subgroup?: string },
 ): string {
   const fam = params.family ?? "gaussian";
   const isLogit = fam === "binomial";
@@ -367,7 +367,7 @@ if (n_cycles > 1) {
 required <- c("${outcome.variableName}", "${exposure}", ${rChar(predictors.slice(1).map((p) => p.variableName))}, "wt")
 pooled <- pooled[complete.cases(pooled[, intersect(required, names(pooled))]), ]
 pooled <- pooled[pooled$wt > 0, ]
-
+${params.subgroup ? `pooled <- pooled |> filter(${params.subgroup})  # subgroup filter\n` : ""}
 dsn <- svydesign(ids = ~SDMVPSU, strata = ~SDMVSTRA, weights = ~wt, nest = TRUE, data = pooled)
 options(survey.lonely.psu = "adjust")
 
@@ -524,6 +524,7 @@ export function generateSurvivalCode(
     covariates?: string[] | null;
     log_exposure?: boolean;
     cause?: string;
+    subgroup?: string;
   },
 ): string {
   const log = params.log_exposure !== false;
@@ -553,7 +554,7 @@ for (s in series) {
 # nhanespewas should expose mortality_status + permth_int / followup_years on the merged frame.
 required <- c("${exposure.variableName}", "permth_int", "mortality_status", covariates, "wt")
 pooled <- pooled[complete.cases(pooled[, intersect(required, names(pooled))]), ]
-${log ? `pooled <- pooled[pooled$\`${exposure.variableName}\` > 0, ]\npooled$exposure_z <- scale(log10(pooled$\`${exposure.variableName}\`))\n` : `pooled$exposure_z <- scale(pooled$\`${exposure.variableName}\`)\n`}
+${params.subgroup ? `pooled <- pooled |> filter(${params.subgroup})  # subgroup filter\n` : ""}${log ? `pooled <- pooled[pooled$\`${exposure.variableName}\` > 0, ]\npooled$exposure_z <- scale(log10(pooled$\`${exposure.variableName}\`))\n` : `pooled$exposure_z <- scale(pooled$\`${exposure.variableName}\`)\n`}
 ${causeFilter}
 
 cov_part <- if (length(covariates) > 0) paste0(" + ", paste(covariates, collapse = " + ")) else ""
