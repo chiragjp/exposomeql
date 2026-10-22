@@ -3012,14 +3012,18 @@ disconnect_pewas_data(con)
 
   server.tool(
     "cohort_exwas",
-    "Run a quantile ExWAS across all analytes in an HHEAR cohort. Regresses each exposure on age + sex + year using quantile regression. Returns ranked associations with BH-FDR correction at 10%. WARNING: Can take several minutes.",
+    "Run an ExWAS across all analytes in an HHEAR cohort. Provide `outcome` (a phenotype/health-outcome epi variable) for a standard outcome-anchored ExWAS: each exposure tested as outcome ~ ln(exposure) + age + sex (OLS, or logistic if the outcome is binary). Without `outcome`, falls back to a quantile scan of each exposure on age + sex + year. Returns ranked associations with BH-FDR correction at 10%. WARNING: Can take several minutes.",
     {
       cohort: z.string().describe("Cohort ID"),
+      outcome: z
+        .string()
+        .optional()
+        .describe("Phenotype / health-outcome epi variable to correlate every exposure against (e.g., 'bmi', 'birthweight'). Omit for a demographic (age/sex/year) exposure scan."),
       tau: z
         .number()
         .optional()
         .default(0.5)
-        .describe("Quantile to test (default: 0.5 = median)"),
+        .describe("Quantile to test for the demographic scan (default: 0.5 = median; ignored when `outcome` is set)"),
       fdr_threshold: z
         .number()
         .optional()
@@ -3027,7 +3031,7 @@ disconnect_pewas_data(con)
         .describe("FDR threshold (default: 0.10)"),
       creatinine_adjust: z.boolean().optional().default(false).describe("Adjust urinary concentrations by creatinine"),
     },
-    async ({ cohort, tau, fdr_threshold, creatinine_adjust }) => {
+    async ({ cohort, outcome, tau, fdr_threshold, creatinine_adjust }) => {
       const cohortConfig = findCohort(ctx, cohort);
       if (!cohortConfig) {
         return {
@@ -3047,6 +3051,7 @@ disconnect_pewas_data(con)
             targeted_csv: cohortConfig.targetedLongCsv ?? path.join(cohortConfig.dataDir, cohortConfig.targetedDataFile),
             epi_csv: cohortConfig.epiDataFile ? path.join(cohortConfig.dataDir, cohortConfig.epiDataFile) : null,
             analytes: cohortConfig.analytes.filter((a) => a !== "CRE" && a !== "SG"),
+            outcome_column: outcome ?? null,
             tau: tau ?? 0.5,
             fdr_threshold: fdr_threshold ?? 0.1,
             creatinine_adjust: creatinine_adjust ?? false,
@@ -3064,7 +3069,7 @@ disconnect_pewas_data(con)
               text: JSON.stringify({
                 cohort: cohortConfig.id,
                 ...rResult,
-                reproducible_code: generateCohortExwasCodePy({ cohort, tau, fdr_threshold }),
+                reproducible_code: generateCohortExwasCodePy({ cohort, tau, fdr_threshold, outcome }),
               }, bigintReplacer, 2),
             },
           ],

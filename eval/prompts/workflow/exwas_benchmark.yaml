@@ -1,0 +1,39 @@
+id: workflow_exwas_benchmark
+category: workflow_benchmark
+prompt: |
+  Conduct a full exposure-wide association study (ExWAS) against serum uric acid
+  (LBXSUA) in NHANES. Specifically:
+
+  1. Scan ALL available environmental exposures against uric acid
+  2. Report the total number of exposures tested
+  3. Apply appropriate multiple testing correction — state which method and threshold
+  4. List the top 20 associations that survive correction, with effect sizes and p-values
+  5. State what adjustment variables (covariates) were used in the model
+  6. For the top 3 associations, briefly note whether the direction is biologically plausible
+
+  Be precise with numbers. This is for a methods paper.
+expected:
+  # Ground truth from EP-WAS atlas (model 6, meta-analytic UWLS)
+  n_tests_catalog: 165342
+  bonferroni_threshold: 3.02e-7
+  model_6_covariates: "age + age² + sex + ethnicity"
+  top_hit_direction: positive  # PFOA → uric acid is positive
+  must_report_n_tests: true
+  must_apply_correction: true
+deterministic_checks:
+  required_terms:
+    - "(bonferroni|FDR|BH|multiple.test|q.value|165[,]?342|3\\.0[0-2]e-?0?7)"
+    - "(age|sex|ethnicity|race|adjust|covariate|model)"
+    - "(uric acid|LBXSUA)"
+    - "(PFOA|LBXPFOA|lead|LBXBPB|cadmium|LBXBCD)"
+  forbidden_terms:
+    - "(p\\s*<\\s*0\\.05.*significant[^*])"
+required_tools:
+  - "epwas_search|epwas_summary|epwas_phenotype_profile"
+rubric:
+  - reports_exact_n_tests
+  - applies_bonferroni_or_fdr
+  - states_covariates
+  - lists_top_associations_with_numbers
+  - notes_biological_plausibility
+  - cites_specific_effect_sizes

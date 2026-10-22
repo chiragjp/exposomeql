@@ -114,34 +114,37 @@ for predicting RCT-established causal effects.
 | Nutrient RCT evidence | Cochrane + high-impact meta-analyses | 64 nutrient-outcome pairs, 17 nutrients |
 | Dietary guidelines | IOM/NASEM DRI, DGA 2025-2030 | RDA/AI/UL for 16 nutrients |
 
-## Tools (46)
+## Tools (74)
 
-### Descriptive Statistics (6)
-`nhanes_mean` · `nhanes_prevalence` · `nhanes_distribution` · `nhanes_quantile` · `nhanes_count` · `nhanes_trend`
+### Descriptive statistics (8)
+`nhanes_mean` · `nhanes_prevalence` · `nhanes_distribution` · `nhanes_quantile` · `nhanes_count` · `nhanes_trend` · `secular_trend` · `nhanes_reference_interval`
 
-### Bivariate Analysis (5)
-`nhanes_conditional` · `nhanes_crosstab` · `nhanes_stratify` · `nhanes_correlation` · `nhanes_compare_groups`
+### Bivariate & stratified analysis (7)
+`nhanes_correlation` · `nhanes_crosstab` · `nhanes_conditional` · `nhanes_stratify` · `nhanes_compare_groups` · `exposure_correlation_matrix` · `phenotype_correlation_matrix`
 
-### EP-WAS Association Search (6)
-`epwas_search` · `epwas_summary` · `epwas_phenotype_profile` · `epwas_vibration` · `nhanes_analyze` · `nhanes_exwas`
+### ExWAS & EP-WAS catalog (8)
+`nhanes_exwas` · `nhanes_exwas_stratified` · `epwas_search` · `epwas_summary` · `epwas_phenotype_profile` · `epwas_vibration` · `epwas_reverse_triangulate` · `exposome_globe`
 
-### Regression & Modeling (7)
-`nhanes_model` · `nhanes_dose_response` · `nhanes_interaction` · `nhanes_mediation` · `nhanes_predict` · `nhanes_validate` · `nhanes_interaction`
+### Regression & modeling (11)
+`nhanes_model` · `nhanes_predict` · `nhanes_interaction` · `nhanes_mediation` · `nhanes_dose_response` · `nhanes_quantile_regression` · `nhanes_sensitivity` · `nhanes_variance_decomposition` · `nhanes_scatter` · `nhanes_analyze` · `nhanes_validate`
 
-### HHEAR Cohort Analytics (9)
-`cohort_list` · `cohort_variables` · `cohort_mean` · `cohort_exposure_intervals` · `cohort_demographic_model` · `cohort_exwas` · `cross_cohort_compare` · `cohort_cumulative_score` · `nhanes_hhear_bridge`
+### Mortality / survival (2)
+`nhanes_survival` · `mortality_search`
 
-### Chemical & CTD Toxicogenomics (6)
-`chemical_info` · `ctd_chemical_genes` · `ctd_chemical_diseases` · `ctd_chemical_pathways` · `ctd_chemical_go` · `ctd_triangulate`
+### HHEAR cohort analytics (11)
+`cohort_list` · `cohort_variables` · `cohort_mean` · `cohort_exwas` · `cohort_outcome_associations` · `cohort_demographic_model` · `cohort_exposure_intervals` · `cohort_cumulative_score` · `cohort_chemical_availability` · `cross_cohort_compare` · `nhanes_hhear_bridge`
 
-### Cross-Cutting (4)
-`cohort_chemical_availability` · `cohort_outcome_associations` · `epwas_reverse_triangulate` · `exposure_profile`
+### Chemical & CTD toxicogenomics (7)
+`chemical_info` · `ctd_query` · `ctd_chemical_genes` · `ctd_chemical_diseases` · `ctd_chemical_pathways` · `ctd_chemical_go` · `ctd_triangulate`
 
-### Nutrient Triangulation (5)
-`nutrient_rct_evidence` · `nutrient_phenotype_associations` · `nutrient_triangulate` · `nutrient_biomarker_vs_dietary` · `nutrient_concordance_summary`
+### Nutrient & diet triangulation (7)
+`nutrient_rct_evidence` · `nutrient_triangulate` · `nutrient_phenotype_associations` · `nutrient_biomarker_vs_dietary` · `nutrient_concordance_summary` · `diet_assess` · `diet_quality`
 
-### Meta-Analytic Diagnostics (3)
-`simpson_paradox_test` · `secular_trend` · `exposure_compare` · `confounder_check` · `guideline_compare`
+### Phenotype derivation (4)
+`nhanes_phenotype_derive` · `phenotype_list` · `phenotype_recipe_catalog` · `phenotype_inspect`
+
+### Exposure profiling & diagnostics (9)
+`exposure_profile` · `exposure_compare` · `coverage_gap` · `confounder_check` · `measurement_uncertainty` · `guideline_compare` · `my_exposome` · `find_doppelgangers` · `simpson_paradox_test`
 
 ## Resources (17)
 
@@ -216,10 +219,59 @@ paper/
 
 ## Prerequisites
 
-- **Node.js** >= 18
-- **R** >= 4.0 with packages: `survey`, `nhanespewas`, `jsonlite`, `DBI`, `RSQLite`, `dplyr`, `quantreg`
-- **nhanespewas** R package: `remotes::install_github("chiragjp/nhanespewas")`
-- **Data**: NHANES SQLite databases (see setup instructions)
+The server computes its statistics in **R** and **Python** subprocesses, so a
+working install needs both runtimes (plus a C/C++ toolchain — `duckdb` and
+several R packages compile from source).
+
+| Runtime | Min version | Needed for |
+|---|---|---|
+| **Node.js** | ≥ 18 | The MCP server itself (TypeScript; `duckdb` is native) |
+| **R** | ≥ 4.0 (`Rscript` on `PATH`) | Survey-weighted NHANES statistics — most tools |
+| **Python** | 3.x (`python3`, or set `PYTHON_PATH`) | HHEAR cohort tools, phenotype derivation, `nhanes_doppelganger` |
+
+### System packages
+
+```bash
+# macOS (Xcode CLT provides the compiler toolchain)
+xcode-select --install
+brew install node r python@3.12 cmake
+
+# Ubuntu/Debian
+sudo apt-get update && sudo apt-get install -y \
+  build-essential cmake \
+  r-base r-base-dev \
+  libxml2-dev libcurl4-openssl-dev libssl-dev \
+  python3 python3-pip
+# Node 18+ via NodeSource if your distro ships an older one.
+```
+
+### Analysis libraries
+
+Install once after `npm install`:
+
+```bash
+npm run setup-r     # CRAN + GitHub R packages (compiles — can take 10-20 min)
+npm run setup-py    # pandas numpy scipy statsmodels
+#   On PEP-668 systems (Ubuntu 24.04+): use a venv, or
+#   pip3 install --break-system-packages pandas numpy scipy statsmodels
+```
+
+What those install (listed explicitly so the requirements are clear):
+
+- **R (CRAN):** `survey`, `dplyr`, `tidyr`, `purrr`, `broom`, `stringr`,
+  `jsonlite`, `DBI`, `RSQLite`, `mgcv`, `rms`, `mediation`, `quantreg`
+- **R (GitHub, via `remotes`):** `chiragjp/nhanespewas`, `timfolsom/hei`
+- **Python:** `pandas`, `numpy`, `scipy`, `statsmodels`
+
+### Data
+
+NHANES / EP-WAS SQLite + Parquet (~20+ GB), not included in the repo. Point
+`EXPOSOMEQL_DATA_DIR` / `EXPOSOMEQL_DB_PATH` at it; `bash
+scripts/setup-local-data.sh /path/to/nhanespewas/db` wires up the expected
+layout. See **Quick Start** above.
+
+> For a turnkey single-box production deploy (Node + R + Python + Caddy
+> provisioned via cloud-init), see the web app repo's `docs/DEPLOY.md`.
 
 ## Citation
 

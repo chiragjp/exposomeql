@@ -24,8 +24,10 @@ export class VariableResolver {
   }
 
   async initialize(): Promise<void> {
-    // Load all variables from the codebook
-    const rows = await this.db.query<{
+    // Load all variables from the codebook. In HHEAR-only mode the NHANES database
+    // isn't attached, so this query fails — degrade gracefully to an empty index
+    // (HHEAR cohort tools don't use the NHANES variable resolver).
+    type VarRow = {
       "Variable.Name": string;
       "Variable.Description": string;
       Component: string;
@@ -33,18 +35,25 @@ export class VariableResolver {
       "Data.File.Description": string;
       "Begin.Year": number;
       EndYear: number;
-    }>(`
-      SELECT DISTINCT
-        "Variable.Name",
-        "Variable.Description",
-        "Component",
-        "Data.File.Name",
-        "Data.File.Description",
-        "Begin.Year",
-        "EndYear"
-      FROM nhanes.variable_names_epcf
-      WHERE "Variable.Name" IS NOT NULL
-    `);
+    };
+    let rows: VarRow[] = [];
+    try {
+      rows = await this.db.query<VarRow>(`
+        SELECT DISTINCT
+          "Variable.Name",
+          "Variable.Description",
+          "Component",
+          "Data.File.Name",
+          "Data.File.Description",
+          "Begin.Year",
+          "EndYear"
+        FROM nhanes.variable_names_epcf
+        WHERE "Variable.Name" IS NOT NULL
+      `);
+    } catch {
+      console.error("[variable-resolver] NHANES variable index unavailable — HHEAR-only mode (skipping).");
+      rows = [];
+    }
 
     // Deduplicate by variable name (keep first occurrence with description)
     const uniqueVars = new Map<string, VariableEntry>();

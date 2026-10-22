@@ -17,6 +17,10 @@ creatinine_adjust = params.get("creatinine_adjust", False)
 age_column = params.get("age_column")
 sex_column = params.get("sex_column")
 age_transform = params.get("age_transform")
+# Optional health-outcome/phenotype to anchor the ExWAS on. When set, each exposure is
+# tested as: outcome ~ ln(exposure) + age + sex (a standard outcome-anchored ExWAS).
+outcome_column = params.get("outcome_column")
+outcome_col = outcome_column.lower() if outcome_column else None
 
 def safe_float(x):
     if x is None or (isinstance(x, float) and (math.isnan(x) or math.isinf(x))):
@@ -32,6 +36,11 @@ try:
     epi = pd.read_csv(epi_csv)
     targeted.columns = targeted.columns.str.lower()
     epi.columns = epi.columns.str.lower()
+
+    if outcome_col and outcome_col not in epi.columns:
+        avail = [c for c in epi.columns if c not in ("_pj",) and "pid" not in c.lower()][:40]
+        print(json.dumps({"error": f"Outcome '{outcome_column}' not found in this cohort's epi data. Available: " + ", ".join(avail)}))
+        sys.exit(1)
 
     pid_col = next((c for c in ["pid", "child_pid", "subject_id"] if c in targeted.columns),
                    next((c for c in targeted.columns if "pid" in c.lower()), "pid"))
@@ -125,25 +134,54 @@ try:
                 terms += " + year_val"
                 model_cols.append("year_val")
 
-            merged = merged.dropna(subset=model_cols)
-            if len(merged) < 20:
-                continue
+            if outcome_col:
+                # Outcome-anchored ExWAS: outcome ~ ln(exposure) + age + sex(+year).
+                merged = merged[pd.to_numeric(merged["conc"], errors="coerce") > 0].copy()
+                merged["lnconc"] = np.log(pd.to_numeric(merged["conc"], errors="coerce"))
+                merged["outcome_val"] = pd.to_numeric(merged[outcome_col], errors="coerce")
+                cols = ["outcome_val", "lnconc"] + [c for c in model_cols if c != "conc"]
+                merged = merged.dropna(subset=cols)
+                if len(merged) < 20:
+                    continue
+                formula = f"outcome_val ~ lnconc + {terms}"
+                uniq = sorted(merged["outcome_val"].dropna().unique())
+                if len(uniq) <= 2:
+                    merged["outcome_val"] = merged["outcome_val"].map({uniq[0]: 0, uniq[-1]: 1})
+                    fit = smf.logit(formula, data=merged).fit(disp=0)
+                    model_type = "logistic"
+                else:
+                    fit = smf.ols(formula, data=merged).fit()
+                    model_type = "ols"
+                if "lnconc" in fit.params.index:
+                    results.append({
+                        "analyte": a,
+                        "term": "ln(exposure)",
+                        "estimate": safe_float(fit.params["lnconc"]),
+                        "std_error": safe_float(fit.bse["lnconc"]),
+                        "p_value": safe_float(fit.pvalues["lnconc"]),
+                        "n": int(len(merged)),
+                        "model": model_type,
+                    })
+            else:
+                merged = merged.dropna(subset=model_cols)
+                if len(merged) < 20:
+                    continue
 
-            formula = f"conc ~ {terms}"
-            mod = smf.quantreg(formula, data=merged)
-            fit = mod.fit(q=tau_val)
+                formula = f"conc ~ {terms}"
+                mod = smf.quantreg(formula, data=merged)
+                fit = mod.fit(q=tau_val)
 
-            # Extract age coefficient
-            if "age_val" in fit.params.index:
-                results.append({
-                    "analyte": a,
-                    "term": "age_val",
-                    "estimate": safe_float(fit.params["age_val"]),
-                    "std_error": safe_float(fit.bse["age_val"]),
-                    "p_value": safe_float(fit.pvalues["age_val"]),
-                    "n": int(len(merged)),
-                    "tau": tau_val,
-                })
+                # Extract age coefficient
+                if "age_val" in fit.params.index:
+                    results.append({
+                        "analyte": a,
+                        "term": "age_val",
+                        "estimate": safe_float(fit.params["age_val"]),
+                        "std_error": safe_float(fit.bse["age_val"]),
+                        "p_value": safe_float(fit.pvalues["age_val"]),
+                        "n": int(len(merged)),
+                        "tau": tau_val,
+                    })
         except Exception as e:
             errors.append(f"{a}: {str(e)}")
 
@@ -174,7 +212,15 @@ try:
         "n_significant_fdr": n_fdr_sig,
         "results": results,
         "errors": errors if errors else None,
-        "note": f"Quantile regression at tau={tau_val}. P-values corrected: p_bonferroni and p_fdr_bh (BH). FDR threshold = {int(fdr_threshold*100)}%.",
+        "outcome": outcome_column if outcome_col else None,
+        "model": (f"{outcome_column} ~ ln(exposure) + age + sex (per analyte; OLS, or logistic if binary)"
+                  if outcome_col else
+                  f"exposure ~ age + sex + year (quantile regression, tau={tau_val})"),
+        "note": (
+            f"Outcome-anchored ExWAS: each exposure tested against '{outcome_column}', adjusted for age + sex. P-values BH-FDR corrected at {int(fdr_threshold*100)}%."
+            if outcome_col else
+            f"Quantile regression at tau={tau_val}. P-values corrected: p_bonferroni and p_fdr_bh (BH). FDR threshold = {int(fdr_threshold*100)}%."
+        ),
     }
     print(json.dumps(output))
 

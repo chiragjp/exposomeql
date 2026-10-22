@@ -36,9 +36,13 @@ function findDataDir(): string {
     }
   }
 
-  throw new Error(
-    "Cannot find NHANES data directory. Set EXPOSOMEQL_DATA_DIR or create a symlink at ./data"
-  );
+  // HHEAR-only mode: no NHANES database present. Don't fail — return a (possibly
+  // empty) data dir. DuckDBManager.attachDatabases() guards every ATTACH with
+  // existsSync, so missing NHANES/CTD files are simply skipped and only the HHEAR
+  // cohort tools (which read the HHEAR CSVs) remain functional.
+  const fallback = process.env.EXPOSOMEQL_DATA_DIR ?? path.resolve(process.cwd(), "data");
+  console.error("[exposomeql] No NHANES database found — starting in HHEAR-only mode (NHANES/CTD tools disabled).");
+  return fallback;
 }
 
 function findRscript(): string {

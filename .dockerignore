@@ -1,0 +1,9 @@
+# NEVER send the NHANES data (a 59 GB symlink to ../nhanespewas/db) into the build context.
+data
+node_modules
+dist
+eval
+paper
+*.log
+.git
+.DS_Store
