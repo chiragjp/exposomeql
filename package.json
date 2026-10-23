@@ -37,7 +37,7 @@
     "epidemiology"
   ],
   "author": "Chirag J. Patel",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.0",
     "duckdb": "^1.2.0",
