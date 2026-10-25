@@ -7,6 +7,9 @@
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import fs from "node:fs";
+import path from "node:path";
+import { CTD_CHEMICAL_MAP } from "../src/variables/ctd-chemical-map.js";
 
 interface TestResult {
   name: string;
@@ -581,6 +584,26 @@ async function main() {
       passed: false,
       duration_ms: 0,
       error: (err as Error).message,
+    });
+  }
+
+  // ── CTD map integrity: every mesh_id must exist in the CTD chemical vocabulary ──
+  const ctdVocab = path.join("data", "ctd", "raw", "CTD_chemicals.tsv");
+  if (fs.existsSync(ctdVocab)) {
+    const t13 = Date.now();
+    const ids = new Set<string>();
+    for (const line of fs.readFileSync(ctdVocab, "utf-8").split("\n")) {
+      if (line && !line.startsWith("#")) ids.add(line.split("\t")[1]?.replace("MESH:", ""));
+    }
+    const bad = CTD_CHEMICAL_MAP.filter((m) => !ids.has(m.mesh_id)).map((m) => `${m.chemical_name}=${m.mesh_id}`);
+    const seen = new Set<string>();
+    const dupVars = CTD_CHEMICAL_MAP.flatMap((m) => m.nhanes_vars).filter((v) => seen.has(v) || !seen.add(v));
+    const ok = bad.length === 0 && dupVars.length === 0;
+    results.push({
+      name: `CTD map: ${CTD_CHEMICAL_MAP.length} mesh_ids valid in CTD vocabulary, NHANES vars unique`,
+      passed: ok,
+      duration_ms: Date.now() - t13,
+      error: ok ? undefined : `invalid mesh_id: ${bad.slice(0, 10).join(", ")}; duplicate vars: ${dupVars.slice(0, 10).join(", ")}`,
     });
   }
 

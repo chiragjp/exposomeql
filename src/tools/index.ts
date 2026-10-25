@@ -139,6 +139,11 @@ function bigintReplacer(_key: string, value: unknown): unknown {
   return typeof value === "bigint" ? Number(value) : value;
 }
 
+/** CTD identity per mapped analyte; mesh_match "parent"/"class" means CTD results are for the parent compound or chemical class */
+function ctdIdentity(mappings: CTDChemicalMapping[]) {
+  return mappings.map((m) => ({ chemical: m.chemical_name, mesh_id: m.mesh_id, ctd_name: m.ctd_name, mesh_match: m.mesh_match }));
+}
+
 /** Format a resolve result for display when ambiguous */
 function formatCandidates(result: ResolveResult): string {
   if (!result.candidates || result.candidates.length === 0) {
@@ -3520,6 +3525,7 @@ disconnect_pewas_data(con)
             text: JSON.stringify({
               chemical: mappings[0].chemical_name,
               mesh_ids: meshIds,
+              ctd_identity: ctdIdentity(mappings),
               nhanes_vars: mappings.flatMap((m) => m.nhanes_vars),
               organism: organism ?? "Homo sapiens",
               biological_context: biological_context ?? "all",
@@ -3620,6 +3626,7 @@ disconnect_pewas_data(con)
             text: JSON.stringify({
               chemical: mappings[0].chemical_name,
               mesh_ids: meshIds,
+              ctd_identity: ctdIdentity(mappings),
               nhanes_vars: mappings.flatMap((m) => m.nhanes_vars),
               total_associations: Number(stats?.cnt ?? 0),
               direct_evidence_count: Number(stats?.direct_cnt ?? 0),
@@ -3703,6 +3710,7 @@ disconnect_pewas_data(con)
             text: JSON.stringify({
               chemical: mappings[0].chemical_name,
               mesh_ids: meshIds,
+              ctd_identity: ctdIdentity(mappings),
               nhanes_vars: mappings.flatMap((m) => m.nhanes_vars),
               total_pathways: Number((totalCount[0] as any)?.cnt ?? 0),
               significant_at: pThreshold,
@@ -3794,6 +3802,7 @@ disconnect_pewas_data(con)
             text: JSON.stringify({
               chemical: mappings[0].chemical_name,
               mesh_ids: meshIds,
+              ctd_identity: ctdIdentity(mappings),
               nhanes_vars: mappings.flatMap((m) => m.nhanes_vars),
               go_terms_by_domain: domainCounts,
               significant_at: pThreshold,
@@ -4059,6 +4068,7 @@ disconnect_pewas_data(con)
       const results: Record<string, unknown> = {
         exposure: chemName,
         mesh_ids: meshIds,
+        ctd_identity: ctdIdentity(mappings),
         nhanes_vars: nhanesVars,
         hhear_codes: mappings.filter((m) => m.hhear_code).map((m) => m.hhear_code),
         disease_query: disease ?? "all (full ExWAS profile)",
