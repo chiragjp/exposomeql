@@ -134,9 +134,21 @@ tryCatch({
       p75 = round(quantile(cs, 0.75, na.rm = TRUE), 4)
     ),
     per_analyte_stats = analyte_stats,
-    # Top 10 highest and lowest cumulative scores
-    top_10_highest = head(combined[order(-combined$cumulative_score), c("pid_lower", "cumulative_score", "n_chemicals")], 10),
-    top_10_lowest = head(combined[order(combined$cumulative_score), c("pid_lower", "cumulative_score", "n_chemicals")], 10)
+    # Score distribution by decile. Aggregates only: HHEAR data are under a
+    # data-use agreement, so participant IDs never leave this script.
+    score_deciles = as.list(setNames(
+      round(quantile(cs, seq(0.1, 0.9, by = 0.1), na.rm = TRUE, names = FALSE), 4),
+      paste0("p", seq(10, 90, by = 10))
+    )),
+    score_tails = local({
+      n_tail <- max(1L, as.integer(round(sum(!is.na(cs)) * 0.1)))
+      srt <- sort(cs)
+      list(
+        top_decile_mean = round(mean(tail(srt, n_tail)), 4),
+        bottom_decile_mean = round(mean(head(srt, n_tail)), 4),
+        n_per_decile = n_tail
+      )
+    })
   )
 
   # If epi data available, check association of cumulative score with demographics

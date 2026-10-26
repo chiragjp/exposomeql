@@ -5,6 +5,7 @@ import type { ExposomeQLConfig } from "../config.js";
 import type { RResult } from "../types.js";
 import { RPool } from "./r-pool.js";
 import { makeReproCall, withReproCall } from "../repro-call.js";
+import { isRestrictedScript, withholdParticipantRows } from "../guardrails/participant-ids.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R_SCRIPTS_DIR = path.join(__dirname, "..", "..", "src", "r-bridge", "r-scripts");
@@ -93,7 +94,8 @@ export class RExecutor {
     timeoutMs?: number
   ): Promise<RResult> {
     const scriptPath = path.join(R_SCRIPTS_DIR, scriptName);
-    const result = await this.executeRaw(scriptName, scriptPath, params, timeoutMs);
+    let result = await this.executeRaw(scriptName, scriptPath, params, timeoutMs);
+    if (isRestrictedScript(scriptName, params, this.dataRoots.HHEAR_DATA_DIR)) result = withholdParticipantRows(result);
     return withReproCall(result, makeReproCall("r", scriptPath, params, this.dataRoots));
   }
 

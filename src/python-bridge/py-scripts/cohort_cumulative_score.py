@@ -73,7 +73,10 @@ try:
             chem = chem[valid].copy()
             chem["concentration"] = chem["concentration"] / chem["cre_conc"] * 100
 
-        vals = chem["concentration"].dropna()
+        # One value per participant: repeat samples (visits, matrices) are
+        # averaged, otherwise the merge across analytes multiplies rows.
+        chem["_pid"] = chem[pid_col].astype(str).str.lower()
+        vals = chem.dropna(subset=["concentration"]).groupby("_pid")["concentration"].mean()
         if len(vals) < 10:
             continue
 
@@ -83,7 +86,7 @@ try:
             scores = vals.rank(pct=True)
 
         score_df = pd.DataFrame({
-            "pid": chem[pid_col].astype(str).str.lower(),
+            "pid": vals.index.values,
             f"score_{analyte}": scores.values,
         })
 
@@ -110,9 +113,15 @@ try:
 
     cs = merged["cumulative_score"]
 
-    # Top/bottom 10
-    top10 = merged.nlargest(10, "cumulative_score")[["pid", "cumulative_score"]].to_dict("records")
-    bot10 = merged.nsmallest(10, "cumulative_score")[["pid", "cumulative_score"]].to_dict("records")
+    # Score distribution by decile. Aggregates only: HHEAR data are under a
+    # data-use agreement, so participant IDs never leave this script.
+    deciles = {f"p{q}": safe_float(cs.quantile(q / 100)) for q in range(10, 100, 10)}
+    n_tail = max(1, int(round(len(cs) * 0.1)))
+    tails = {
+        "top_decile_mean": safe_float(cs.nlargest(n_tail).mean()),
+        "bottom_decile_mean": safe_float(cs.nsmallest(n_tail).mean()),
+        "n_per_decile": n_tail,
+    }
 
     # Age/sex correlation if epi data available
     age_corr = None
@@ -164,8 +173,8 @@ try:
             "p75": safe_float(cs.quantile(0.75)),
         },
         "per_analyte_stats": per_analyte_stats,
-        "top_10_highest": [{**r, "cumulative_score": safe_float(r["cumulative_score"])} for r in top10],
-        "top_10_lowest": [{**r, "cumulative_score": safe_float(r["cumulative_score"])} for r in bot10],
+        "score_deciles": deciles,
+        "score_tails": tails,
         "age_correlation": age_corr,
         "sex_difference": sex_diff,
     }

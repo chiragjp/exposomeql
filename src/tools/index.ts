@@ -3206,7 +3206,7 @@ disconnect_pewas_data(con)
 
   server.tool(
     "cohort_cumulative_score",
-    "Compute a cumulative exposure score for each participant in an HHEAR cohort. Averages percentile ranks (or Z-scores) across all detected chemicals per person. Tests association with age and sex if epi data available.",
+    "Compute a cumulative exposure score for each participant in an HHEAR cohort. Averages percentile ranks (or Z-scores) across all detected chemicals per person. Returns aggregates only (summary stats, deciles, per-analyte stats); participant IDs and individual scores are never returned (HHEAR data-use agreement). Tests association with age and sex if epi data available.",
     {
       cohort: z.string().describe("Cohort ID"),
       analytes: z

@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import type { ExposomeQLConfig } from "../config.js";
 import { makeReproCall, withReproCall } from "../repro-call.js";
+import { isRestrictedScript, withholdParticipantRows } from "../guardrails/participant-ids.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PY_SCRIPTS_DIR = path.join(__dirname, "..", "..", "src", "python-bridge", "py-scripts");
@@ -166,7 +167,8 @@ export class PythonExecutor {
         }
 
         try {
-          const parsed = parseJsonOutput(stdout, scriptName);
+          let parsed = parseJsonOutput(stdout, scriptName);
+          if (isRestrictedScript(scriptName, params, this.dataRoots.HHEAR_DATA_DIR)) parsed = withholdParticipantRows(parsed);
           settle(resolve, withReproCall(parsed, makeReproCall("python", scriptPath, params, this.dataRoots)));
         } catch (e) {
           settle(
