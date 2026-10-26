@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import type { ExposomeQLConfig } from "../config.js";
 import type { RResult } from "../types.js";
 import { RPool } from "./r-pool.js";
+import { makeReproCall, withReproCall } from "../repro-call.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R_SCRIPTS_DIR = path.join(__dirname, "..", "..", "src", "r-bridge", "r-scripts");
@@ -32,12 +33,15 @@ export class RExecutor {
   private nhanespewasPath: string;
   private timeoutMs: number;
   private pool: RPool | null = null;
+  /** Data roots rewritten to env-var placeholders in `repro_call` params. */
+  private dataRoots: Record<string, string | undefined>;
 
   constructor(config: ExposomeQLConfig, timeoutMs = 60_000) {
     this.rscriptPath = config.rscriptPath;
     this.nhanesDbPath = config.nhanesDbPath;
     this.nhanespewasPath = config.nhanespewasPath;
     this.timeoutMs = timeoutMs;
+    this.dataRoots = { HHEAR_DATA_DIR: config.hhearDataDir, EXPOSOMEQL_DATA_DIR: config.dataDir };
 
     if (poolEnabled()) {
       const size = poolSize();
@@ -89,6 +93,16 @@ export class RExecutor {
     timeoutMs?: number
   ): Promise<RResult> {
     const scriptPath = path.join(R_SCRIPTS_DIR, scriptName);
+    const result = await this.executeRaw(scriptName, scriptPath, params, timeoutMs);
+    return withReproCall(result, makeReproCall("r", scriptPath, params, this.dataRoots));
+  }
+
+  private async executeRaw(
+    scriptName: string,
+    scriptPath: string,
+    params: Record<string, unknown>,
+    timeoutMs?: number,
+  ): Promise<RResult> {
     if (this.pool) {
       try {
         const stdout = await this.pool.call(scriptPath, params, {}, timeoutMs);

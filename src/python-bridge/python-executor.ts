@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 import type { ExposomeQLConfig } from "../config.js";
+import { makeReproCall, withReproCall } from "../repro-call.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PY_SCRIPTS_DIR = path.join(__dirname, "..", "..", "src", "python-bridge", "py-scripts");
@@ -36,11 +37,14 @@ export class PythonExecutor {
   private pythonPath: string;
   private nhanesDbPath: string;
   private timeoutMs: number;
+  /** Data roots rewritten to env-var placeholders in `repro_call` params. */
+  private dataRoots: Record<string, string | undefined>;
 
   constructor(config: ExposomeQLConfig, timeoutMs = 60_000) {
     this.pythonPath = findPython();
     this.nhanesDbPath = config.nhanesDbPath;
     this.timeoutMs = timeoutMs;
+    this.dataRoots = { HHEAR_DATA_DIR: config.hhearDataDir, EXPOSOMEQL_DATA_DIR: config.dataDir };
   }
 
   /**
@@ -163,7 +167,7 @@ export class PythonExecutor {
 
         try {
           const parsed = parseJsonOutput(stdout, scriptName);
-          settle(resolve, parsed);
+          settle(resolve, withReproCall(parsed, makeReproCall("python", scriptPath, params, this.dataRoots)));
         } catch (e) {
           settle(
             reject,
