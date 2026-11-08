@@ -1,0 +1,911 @@
+{
+  "00496": {
+    "id": "00496",
+    "project_id": "2020-00496",
+    "pi": "Dr. Reynolds",
+    "description": "Serum measures of perfluoroalkyl and polyfluoroalkyl substances, brominated flame retardants, and blood lipids in adult women from the California Teacher\u2019s Study.",
+    "population_note": "adult female participants",
+    "country": "USA",
+    "city_region": "California",
+    "study_name": "California Teachers Study",
+    "analyte_names": {
+      "Analysis": "Laboratory \nU2CES026561",
+      "HHEAR": "participant",
+      "Cells": "Page 3 of 5",
+      "SPFAS": "Perfluoroalkyl and Polyfluoroalkyl Substances PFUNDA Perfluroundecanoic acid",
+      "BLIPID": "Lipids in blood \nTG \nTriglycerides \nPBFR \nBrominated Flame Retardants",
+      "PBFR": "Brominated Flame Retardants",
+      "Codes": "Code \nDefinition \n0 \nValid measurement \n37 \nValue less than LOD \n50 \nThawed and hemolyzed (covers all three levels) \n130 \nValue above LOD but below LOQ \n199 \nValue below LOQ, no LOD provided",
+      "Parent": "study \nEpidemiological data on adult women collected \nfrom"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "37": "Value less than LOD",
+      "50": "Thawed and hemolyzed (covers all three levels)",
+      "130": "Value above LOD but below LOQ",
+      "199": "Value below LOQ, no LOD provided"
+    }
+  },
+  "00605": {
+    "id": "00605",
+    "project_id": "2020-00605",
+    "pi": "Dr. Gokce",
+    "description": "Serum and plasma Brominated Flame Retardants, Perfluoroalkyl and Polyfluoroalkyl Substances, Organochlorine Pesticides, and Polychlorinated biphenyls in lean adults at a baseline visit 1, and obese adults at baseline visit 1 pre-bariatric surgery, and follow-up visit 2 post-bariatric surgery.",
+    "population_note": "lean and obese adults (bariatric surgery)",
+    "country": "USA",
+    "city_region": "Boston, MA",
+    "study_name": "Bariatric Surgery Cohort",
+    "analyte_names": {
+      "Teitelbaum": "HHEAR Center for Data Science \nU2CES026555 \nPage 2 of 8",
+      "HHEAR": "participant",
+      "Cells": "Targeted Analyte Codes \nPage 4 of 8",
+      "PBFR": "Brominated Flame Retardants",
+      "SPFAS": "Perfluoroalkyl and \nPolyfluoroalkyl Substances \nPFOA \nPerfluorooctanoic acid (total)",
+      "SOC": "Organochlorine Pesticides \nOCHL \noxychlordane",
+      "SPCB": "Polychlorinated biphenyls \nPCB99 \nPCB99",
+      "Codes": "Code \nDefinition \n0 \nValid measurement \n37 \nValue less than LOD \n93 \nInitial concentration higher than the highest standard"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "37": "Value less than LOD"
+    }
+  },
+  "00606": {
+    "id": "00606",
+    "project_id": "2020-00606",
+    "pi": "Dr. Iva Miljkovic",
+    "description": "Urinary trace elements, speciated arsenic and creatinine in a cohort of adult African Caribbeans men and women (40-93 years old) from Trinidad and Tobago",
+    "population_note": "adults (African Caribbean, age 40-93, Trinidad and Tobago)",
+    "country": "Trinidad and Tobago",
+    "city_region": "Tobago",
+    "study_name": "Tobago Health Study",
+    "analyte_names": {
+      "Cells": "Targeted Comment Codes \nCode Definition \n0 Valid measurement \n18 Quantity of sample insufficient for repeat analysis \n37 Value below LOD",
+      "UTE": "Trace Elements in urine \nZn \nZinc",
+      "UAS": "Speciated Arsenic",
+      "AsB": "Arsenobetaine",
+      "AsC": "Arsenocholine",
+      "DMA": "Dimethylarsinic acid",
+      "As": "Inorganic As, sum of AsIII and AsV",
+      "UDILUTE": "Urinary Dilution Factor \nCRE \nCreatinine"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "18": "Quantity of sample insufficient for repeat analysis",
+      "37": "Value below LOD",
+      "97": "Result repeated with diluted sample"
+    }
+  },
+  "00652": {
+    "id": "00652",
+    "project_id": "2020-00652",
+    "pi": "Dr. Heather Zar",
+    "description": "Urinary organophosphorus flame retardant, phenol, pesticide, dialkyl phosphate pesticide metabolite, psychosocial stress marker, tobacco metabolite, urinary dilution, polycyclic aromatic hydrocarbon, and volatile organic compound concentrations from pregnant mothers during the 3rd trimester or delivery, and from children in early childhood at age five or six.",
+    "population_note": "mothers and children (3rd trimester/delivery, age 5-6)",
+    "country": "South Africa",
+    "city_region": "Cape Town, Drakenstein",
+    "study_name": "Drakenstein Child Health Study",
+    "analyte_names": {
+      "HHEAR": "Targeted Analysis \nLaboratory \nU2CES026561",
+      "UOPFR": "Organophosphorus Flame \nRetardants \nDPHP \nDiphenyl phosphate",
+      "UPHENOL": "Phenols \nTCS \nTriclosan",
+      "UPEST2": "Universal pesticide metabolites \nin urine \nTDCCA Trans-3-(2,2-dichlorovinyl)-2,2-dimethyl-\ncyclopropane-1-carboxylic acid",
+      "STRESS": "Psychosocial Stress Markers \nCORTL \nCortisol",
+      "USMOKE": "Tobacco Metabolites \nCOTT \nCotinine (total)",
+      "UDILUTE": "Urinary Dilution Factor \nCRE \nCreatinine",
+      "UPEST": "Dialkyl phosphate pesticide \nmetabolites \nDMTP \ndimethylthiophosphate",
+      "UPAH": "Polycyclic aromatic \nhydrocarbons \nPYR1 \n1-hydroxypyrene",
+      "VOCs": "Volatile Organic Compounds \nHPMA \nN-Acetyl-S- (3-hydroxypropyl)-L-cysteine",
+      "Codes": "Code Definition \n0 Valid measurement \n199 Value below LOQ, no LOD provided"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "199": "Value below LOQ, no LOD provided"
+    }
+  },
+  "00862": {
+    "id": "00862",
+    "project_id": "2021-00862",
+    "pi": "Dr. Rosa",
+    "description": "Polyaromatic hydrocarbon, phthalate, and pesticide concentrations from both children\u2019s urine and house dust from home visit.",
+    "population_note": "children",
+    "country": "Mexico",
+    "city_region": "Mexico City",
+    "study_name": "PROGRESS",
+    "analyte_names": {
+      "Lee": "Duke HHEAR \nEnvironmental Analysis \nLaboratory \nU2CES030851 \nPage 2 of 8",
+      "EPAH": "Polycyclic aromatic hydrocarbons \n(Environmental) \nPERYLENE \nPerylene",
+      "EPEST": "Pesticides (Environmental) \nAZOXY \nAzoxystrobin",
+      "EPHTH": "Phthalates (Environmental) \nTOTM \ntrioctylmetallitate",
+      "UPHTH": "Phthalates \nMCOMOP \nmono (7-COOH-2-methyloctyl) phthalate \nNA \nUPAH \nPolycyclic aromatic hydrocarbons \nPHET \nPhenanthrene tetrol \nNA",
+      "UPEST2": "Universal pesticide metabolites in \nurine \nTDCCA \nTrans-3-(2,2-dichlorovinyl)-2,2-dimethyl-cyclopropane-\n1-carboxylic acid",
+      "UPEST1": "Universal pesticide metabolites in \nurine \nIMI5OH \n5-hydroxy-imidicloprid"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "32": "Dilution required",
+      "37": "Value less than LOD",
+      "130": "Value above LOD but below LOQ",
+      "202": "Result repeated with diluted sample and is a",
+      "211": "Result is below the LOQ (199) and has been"
+    }
+  },
+  "01103": {
+    "id": "01103",
+    "project_id": "2021-01103",
+    "pi": "Dr. Fen Wu",
+    "description": "Serum perfluoroalkyl and polyfluoroalkyl substance concentrations from women enrolled in the NYU Women\u2019s Health Study.",
+    "population_note": "adult women",
+    "country": "USA",
+    "city_region": "New York, NY",
+    "study_name": "NYU Women's Health Study",
+    "analyte_names": {
+      "HHEAR": "Targeted Analysis \nLaboratory \nU2CES026561",
+      "SPFAS": "Perfluoroalkyl and Polyfluoroalkyl \nSubstances \nPFUNDA \nPerfluroundecanoic acid",
+      "Codes": "Code \nDefinition \n0 \nValid measurement \n37 \nValue less than LOD \n130 \nValue above LOD but below LOQ"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "37": "Value less than LOD",
+      "130": "Value above LOD but below LOQ"
+    }
+  },
+  "1407": {
+    "id": "1407",
+    "project_id": "2016-1407",
+    "pi": "Dr. Phipatanakul",
+    "description": "Urinary phthalates, phenols, polycyclic aromatic hydrocarbons, smoking metabolites, and urinary dilution factor concentrations from asthmatic children",
+    "population_note": "asthmatic children (age 4-13)",
+    "country": "USA",
+    "city_region": "Boston, MA",
+    "study_name": "SICAS (School Inner-City Asthma Study)",
+    "analyte_names": {
+      "Laboratory": "U2CES026533 \nPage 2 of 7",
+      "CHEAR": "Laboratory methods for measurement of urinary phenols and polycyclic aromatic \nhydrocarbons",
+      "UDILUTE": "Urinary Dilution Factor \nSG \nSpecific gravity",
+      "UPHENOL": "Phenols \nPRPB \nPropyl paraben",
+      "UPAH": "Polycyclic aromatic hydrocarbons \nPYR1 \n1-hydroxypyrene",
+      "UPHTH": "Phthalates \nMNBP \nmono-n-butylphthalate (BzBP, DnBP)",
+      "UPB": "Parabens \nPRPB \nPropyl paraben",
+      "USMOKE": "Tobacco Metabolites \nNNAL \n4-(methlynitrosamino)-1-(3-pyridyl)-1-butanol",
+      "Codes": "Code \nDefinition \n0 \nvalid measurement \n17 \nquantity of sample insufficient for analysis \n33 \nResult repeated and confirmed \n37 \nValue less than LOD \n97 \nResult repeated with diluted sample \n199 \nValue below LLOQ, no LOD provided"
+    },
+    "comment_codes": {
+      "0": "valid measurement",
+      "17": "quantity of sample insufficient for analysis",
+      "33": "Result repeated and confirmed",
+      "37": "Value less than LOD",
+      "97": "Result repeated with diluted sample",
+      "199": "Value below LLOQ, no LOD provided"
+    }
+  },
+  "1431": {
+    "id": "1431",
+    "project_id": "2016-1431",
+    "pi": "Dr.  Wei Perng",
+    "description": "Urinary PAHs measures from children during early (P20) or late adoloscence (P01), and/or their pregnant mothers during the 3rd trimester (T3).",
+    "population_note": "children and mothers",
+    "country": "Mexico",
+    "city_region": "Mexico City",
+    "study_name": "ELEMENT",
+    "analyte_names": {
+      "Health": "Exposure Analysis \nResource Laboratory Hub \nU2CES026553 \nPage 2 of 6",
+      "Urine": "Page 4 of 6",
+      "UPAH": "PAHs \nPYR1 \n1-hydroxypyrene",
+      "Codes": "Code \nDefinition \n0 \nvalid measurement \n17 \nquantity of sample insufficient for analysis \n37 \nValue less than LOD \n97 \nResult repeated with diluted sample",
+      "Parent": "study \nEpidemiological data available for subjects in \nstudy provided by the PI"
+    },
+    "comment_codes": {
+      "0": "valid measurement",
+      "17": "quantity of sample insufficient for analysis",
+      "37": "Value less than LOD",
+      "97": "Result repeated with diluted sample"
+    }
+  },
+  "1432": {
+    "id": "1432",
+    "project_id": "2016-1432",
+    "pi": null,
+    "description": "Blood trace elements, inflammatory cytokines, and immune markers from children.",
+    "population_note": "children",
+    "country": "Uganda",
+    "city_region": "Kampala",
+    "study_name": "Pediatric Cerebral Malaria Study",
+    "analyte_names": {
+      "Laboratory": "at Emory \nU2CES026560",
+      "IL25": "INFLAM \nCytokines and Other Inflammatory Markers \nIL27 \nInterleukin27 \nINFLAM \nCytokines and Other Inflammatory Markers \nIL31 \nInterleukin31 \nINFLAM \nCytokines and Other Inflammatory Markers \nTNFA \nTumor necrosis factor A \nINFLAM \nCytokines and Other Inflammatory Markers \nTNFB \nTumor necrosis factor B \nINFLAM \nCytokines and Other Inflammatory Markers \nIL28A \nInterleukin28A \nINFLAM \nCytokines and Other Inflammatory Markers \nMMP1 \nMatrix metalloproteinase 1 \nINFLAM \nCytokines and Other Inflammatory Markers \nMMP2 \nMatrix metalloproteinase 2 \nINFLAM \nCytokines and Other Inflammatory Markers \nMMP7 \nMatrix metalloproteinase 7 \nINFLAM \nCytokines and Other Inflammatory Markers \nMMP9 \nMatrix metalloproteinase 9 \nINFLAM \nCytokines and Other Inflammatory Markers \nMMP10 \nMatrix metalloproteinase 10 \nBTE \nTrace Elements in blood \nMg \nMagnesium \nBTE \nTrace Elements in blood \nAl \nAluminum \nBTE \nTrace Elements in blood \nV \nVanadium \nBTE \nTrace Elements in blood \nMn \nManganese \nBTE \nTrace Elements in blood \nCo \nCobalt \nBTE \nTrace Elements in blood \nCu \nCopper \nBTE \nTrace Elements in blood \nZn \nZinc \nPage 4 of 6",
+      "Chemical": "Group \nCode \nFull Chemical Group Name \nAnalyte Code \nFull Chemical Name \nBTE \nTrace Elements in blood \nAs \nArsenic \nBTE \nTrace Elements in blood \nSe \nSelenium \nBTE \nTrace Elements in blood \nMo \nMolybdenum \nBTE \nTrace Elements in blood \nCd \nCadmium \nBTE \nTrace Elements in blood \nSn \nTin \nBTE \nTrace Elements in blood \nSb \nAntimony \nBTE \nTrace Elements in blood \nCs \nCesium \nBTE \nTrace Elements in blood \nBa \nBarium \nBTE \nTrace Elements in blood \nTl \nThalium \nBTE \nTrace Elements in blood \nPb \nLead",
+      "Codes": "Code \nDefinition \n0 \nValid measurement \n37 \nValue less than LOD \n93 \nInitial concentration higher than the highest standard"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "37": "Value less than LOD"
+    }
+  },
+  "1438": {
+    "id": "1438",
+    "population_note": "pregnant mothers",
+    "country": "Mexico",
+    "city_region": "Mexico City",
+    "study_name": "ELEMENT",
+    "analyte_names": {
+      "Laboratory": "Hub \nU2CES026561",
+      "Plasma": "Page 3 of 4",
+      "Study": "Epidemiologic data dictionary and codebook"
+    }
+  },
+  "1448": {
+    "id": "1448",
+    "project_id": "2016-1448",
+    "pi": "Dr. Frank Gilliland",
+    "country": "USA",
+    "city_region": "Los Angeles, CA",
+    "study_name": "Children's Health Study",
+    "analyte_names": {
+      "Laboratory": "at Emory \nU2CES026560",
+      "Parent": "study \nEpidemiological data available for subjects in \nstudy provided by the PI"
+    }
+  },
+  "1449": {
+    "id": "1449",
+    "project_id": "2016-1449",
+    "description": "Urinary phthalate concentrations from pregnant mothers.",
+    "population_note": "pregnant mothers",
+    "country": "USA",
+    "city_region": "Northern California, Davis",
+    "study_name": "MARBLES (Markers of Autism Risk in Babies)",
+    "analyte_names": {
+      "Laboratory": "at Emory",
+      "FOR": "Page 2 of 7",
+      "Urine": "Page 4 of 7",
+      "Codes": "Code \nDefinition \n0 \nvalid measurement \n15 \nInterfering substances present \n17 \nquantity of sample insufficient for analysis \n37 \nValue less than LOD",
+      "UPHTH": "Phthalates \nMCPP \nmono (3-carboxypropyl) phthalate (multiple) \nUPHTH \nPhthalates \nMECPP \nmono-(2-ethyl-5-carboxypentyl) phthalate \nUPHTH \nPhthalates \nMEHHP \nmono (2-ethyl-5-hydroxyhexyl) phthalate \nUPHTH \nPhthalates \nMEHP \nmono ethyl hexyl phthalate \nUPHTH \nPhthalates \nMEOHP \nmono (2-ethyl-5-oxohexyl) phthalate \nUPHTH \nPhthalates \nMEP \nmonoethyl phthalate (DEP) \nUPHTH \nPhthalates \nMIBP \nmono-isobutyl phthalate (DiBP) \nUPHTH \nPhthalates \nMNBP \nmono-n-butylphthalate (BzBP, DnBP)",
+      "CHEAR": "Data dictionary and codebook for specific gravity corrected \naverage concentrations"
+    },
+    "comment_codes": {
+      "0": "valid measurement",
+      "17": "quantity of sample insufficient for analysis",
+      "37": "Value less than LOD"
+    }
+  },
+  "1450": {
+    "id": "1450",
+    "project_id": "2016-1450",
+    "pi": "CHEAR study, Andrew Liu, MD",
+    "population_note": "children",
+    "country": "USA",
+    "city_region": "Denver, CO",
+    "study_name": "DAPS (Denver Asthma in Pregnancy Study)",
+    "analyte_names": {
+      "Assessment": "Laboratory at Emory \nU2CES026560",
+      "Plasma": "Page 3 of 6",
+      "Phthalates": "UPHTH \nmono-n-butylphthalate (BzBP, DnBP) \nMNBP",
+      "UPAH": "Phenanthrene tetrol \nPHET",
+      "HCOTT": "Tobacco Metabolites \nUSMOKE \nNicotine (total) \nNICT",
+      "Compounds": "VOCs \nN-Acetyl-S-(2-hydroxypropyl)-L-cysteine",
+      "HMPMA": "Volatile Organic Compounds \nVOCs \nN-Acetyl-S- (3-hydroxypropyl)-L-cysteine",
+      "HPMA2": "Volatile Organic Compounds \nVOCs \nN-acetyl-S-phenyl-L-cysteine \nSPMA",
+      "Factor": "UDILUTE \nCreatinine \nCRE",
+      "Markers": "OXID \n8,12-iso-Isoprostane-F2\u03b1-VI \nF2A12I",
+      "CRP": "Cytokines and Other Inflammatory Markers \nINFLAM \nInterferon gamma \nIFNG"
+    },
+    "comment_codes": {
+      "0": "valid measurement",
+      "37": "Value less than LOD",
+      "97": "Result repeated with diluted sample",
+      "115": "Specimen analyzed with less than usual dilution",
+      "130": "Value above LOD but below LLOQ",
+      "199": "Value below LLOQ, no LOD provided",
+      "210": "Initial concentration higher than the highest standard, insufficient"
+    }
+  },
+  "1461": {
+    "id": "1461",
+    "project_id": "2016-1461",
+    "pi": "Dr. Hertz-Picciotto",
+    "description": "Urinary phenols, trace elements, parabens, pesticides, phthalates, and serum per- and polyfluoroalkyl substances (PFAS) concentrations from children who have a sibling diagnosed with autism at their clinical visit. PI-provided specific gravity (SG) is included for each urinary sample as up to two measures (SG_1, SG_2). For samples with more than one SG measure, the average SG was calculated (SG_avg). https://doi.org/10.3 6043/1461_222 1461_PHTH _METHODS.docx CHEAR Laboratory methods for measurement of urinary phthalates",
+    "population_note": "Children",
+    "country": "USA",
+    "city_region": "Northern California, Davis",
+    "study_name": "CHARGE (Childhood Autism Risks from Genetics and Environment)",
+    "analyte_names": {
+      "Assessment": "Resource (WC-CHEAR) \nU2CES026542 \nPage 2 of 7",
+      "CHEAR": "Laboratory methods for measurement of urinary trace elements",
+      "Serum": "Page 3 of 7",
+      "UPHENOL": "Environmental Phenols \nTCS \nTriclosan",
+      "UTE": "Urinary Trace Elements \nU \nUranium",
+      "UPB": "Parabens \nPRPB \nPropyl paraben",
+      "UPEST": "Alkyl phosphate pesticide metabolites \nDMTP \ndimethylthiophosphate",
+      "UPHTH": "Phthalates \nMPEP \nmono-pentyl phthalate",
+      "SPFAS": "Per- and polyfluoroalkyl substances \nPFUNDA \nPerfluroundecanoic acid",
+      "Codes": "Code \nDefinition \n0 \nvalid measurement \n17 \nquantity of sample insufficient for analysis \n33 \nResult repeated and confirmed \n37 \nValue less than LOD \n97 \nResult repeated with diluted sample"
+    },
+    "comment_codes": {
+      "0": "valid measurement",
+      "17": "quantity of sample insufficient for analysis",
+      "33": "Result repeated and confirmed",
+      "37": "Value less than LOD",
+      "97": "Result repeated with diluted sample"
+    }
+  },
+  "1523": {
+    "id": "1523",
+    "project_id": "2016-1523",
+    "pi": "Dr. Margaret Karagas",
+    "description": "Urinary cotinine, NNAL, and creatinine measurements from pregnant mothers.",
+    "population_note": "pregnant mothers",
+    "country": "USA",
+    "city_region": "Lebanon, NH",
+    "study_name": "New Hampshire Birth Cohort Study",
+    "analyte_names": {
+      "Teitelbaum": "CHEAR Center for Data Science \nU2CES026555 \nPage 2 of 6",
+      "Exposure": "Assessment Hub \nU2CES026533",
+      "Format": "Page 3 of 6",
+      "Urine": "Page 4 of 6",
+      "UDILUTE": "Urinary Dilution \nFactor \nCRE \nCreatinine",
+      "USMOKE": "Tobacco \nMetabolites \nNNAL \n4-(methlynitrosamino)-1-(3-pyridyl)-1-butanol",
+      "Codes": "Code \nDefinition \n0 \nValid measurement \n97 \nResult repeated with diluted sample \n115 \nSpecimen analyzed with less than usual dilution \n199 \nValue below LLOQ, no LOD provided"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "97": "Result repeated with diluted sample",
+      "115": "Specimen analyzed with less than usual dilution",
+      "199": "Value below LLOQ, no LOD provided"
+    }
+  },
+  "1534": {
+    "id": "1534",
+    "project_id": "2016-1534",
+    "description": "Urinary phthalate concentrations from children and mothers.",
+    "population_note": "children",
+    "country": "USA",
+    "city_region": "Multi-site",
+    "study_name": "nuMoM2b",
+    "analyte_names": {
+      "Health": "U2CES026553",
+      "Urine": "Page 3 of 5",
+      "Codes": "Comment Code \nDefinition \n0 \nValid measurement \n37 \nInterfering substances present \n15 \nValue less than LOD \n97 \nResult repeated with diluted sample"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "15": "Value less than LOD",
+      "97": "Result repeated with diluted sample"
+    }
+  },
+  "1593": {
+    "id": "1593",
+    "project_id": "2017-1593",
+    "pi": "Dr. Jain",
+    "description": "Serum PFAS and brominated flame retardant concentrations from children with liver disease.",
+    "population_note": "children with liver disease",
+    "country": "USA",
+    "city_region": "St. Louis, MO",
+    "study_name": "Pediatric Liver Disease Study (SLU)",
+    "comment_codes": {
+      "0": "Valid measurement",
+      "17": "Quantity of sample insufficient for analysis",
+      "37": "Value less than LOD"
+    }
+  },
+  "1598": {
+    "id": "1598",
+    "project_id": "2017-1598",
+    "pi": "Dr. Krischer",
+    "description": "Urinary phenol, paraben, phthalate, creatinine, pesticide, trace elements, and PAHs data from children with 1 to 9 clinic visits.",
+    "population_note": "children (1-9 clinic visits)",
+    "country": "USA/Finland/Germany/Sweden",
+    "city_region": "Multi-site",
+    "study_name": "TEDDY (The Environmental Determinants of Diabetes in the Young)",
+    "analyte_names": {
+      "Teitelbaum": "CHEAR Center for Data Science \nU2CES026555 \nPage 2 of 7",
+      "Network": "Laboratory Hub \nU2CES026561",
+      "Format": "Page 3 of 7",
+      "Urine": "Page 4 of 7",
+      "UTE": "Trace Elements in urine \nHg \nMercury",
+      "UPAH": "PAHs \nPYR1 \n1-hydroxypyrene",
+      "UPHENOL": "Phenols \nTCS \nTriclosan",
+      "UPB": "Parabens \nPRPB \nPropyl paraben",
+      "UPHTH": "Phthalates \nMIBP \nmono-isobutyl phthalate (DiBP)",
+      "UPEST": "Alkyl phosphate \npesticide metabolites",
+      "UOPFR": "Organophosphorus \nFlame Retardants \nDPHP \nDiphenyl phosphate",
+      "UDILUTE": "Urinary Dilution Factor \nCRE \nCreatinine",
+      "Codes": "Code \nDefinition \n0 \nValid measurement \n37 \nValue less than LOD \n93 \nInitial concentration higher than the highest standard \n130 \nValue above LOD but below LLOQ",
+      "NA": "Page 7 of 7"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "37": "Value less than LOD",
+      "130": "Value above LOD but below LLOQ"
+    }
+  },
+  "1599": {
+    "id": "1599",
+    "project_id": "2018-1599",
+    "description": "Urinary pesticides, PFAS, and creatinine from pregnant mothers.",
+    "population_note": "pregnant mothers",
+    "country": "USA/Mexico",
+    "city_region": "San Diego/Tijuana border region",
+    "study_name": "Border Maternal-Infant Cohort",
+    "analyte_names": {
+      "Emory": "U2CES026560 \nPage 2 of 5",
+      "CHEAR": "participant",
+      "Cells": "Page 3 of 5",
+      "UPEST2": "Universal pesticide metabolites in urine \nGPS \nGlyphosate",
+      "BDC": "Bisdithiocarbamates \nPTU \nPropylene thiourea",
+      "UDILUTE": "Urinary dilution factors \nCRE \nCreatinine",
+      "SPFAS": "Perfluoroalkyl and Polyfluoroalkyl Substances \nETFOSA N-ethylperfluoro-1-octanesulfonamide"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "32": "Dilution required",
+      "97": "Result repeated with diluted sample",
+      "211": "Result is below the LOQ (199) and has been imputed to be LOQ/(2^0.5) at client request.",
+      "212": "Result is below the LOQ (199) and has been imputed to be LOQ/(2^0.5) at client request."
+    }
+  },
+  "1729": {
+    "id": "1729",
+    "project_id": "2017-1729",
+    "description": "Urinary PAH, oxidative stress and inflammatory marker concentrations from pregnant mothers.",
+    "population_note": "pregnant mothers",
+    "country": "USA",
+    "city_region": "Los Angeles, CA",
+    "study_name": "UCLA Maternal Cohort",
+    "analyte_names": {
+      "Emory": "U2CES026560",
+      "CHEAR": "participant",
+      "Cells": "Page 3 of 5",
+      "UPAH": "Polycyclic aromatic hydrocarbons \nPYR1 \n1-hydroxypyrene",
+      "INFLAM": "Cytokines and Other \nInflammatory Markers \nTNFA \nTumor necrosis factor A",
+      "OXID": "Oxidative Stress Markers \nOSMDA \nMalonodialdehyde",
+      "Codes": "Code \nDefinition \n0 \nValid measurement \n15 \nInterfering substances present (no concentration reported) \n37 \nValue less than LOD",
+      "PhD": "University of California Los Angeles"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "37": "Value less than LOD"
+    }
+  },
+  "1740": {
+    "id": "1740",
+    "project_id": "2017-1740",
+    "pi": "Dr. Cardenas",
+    "description": "Blood trace element concentrations from pregnant mothers during their first trimester. For a subset of samples with previously measured hematocrit (g/dL), provided by the PI, values can be found in the column labeled HEMATOCRIT_g_dl_bld1 . https://doi.org/10.360 43/1740_225 1740_BTE_METHODS.docx CHEAR Laboratory methods for measurement of trace element concentrations",
+    "population_note": "pregnant mothers (1st trimester)",
+    "country": "USA",
+    "city_region": "Eastern Massachusetts",
+    "study_name": "Project Viva",
+    "analyte_names": {
+      "Network": "Laboratory Hub \nU2CES026561",
+      "CHEAR": "participant",
+      "Cells": "Page 4 of 6",
+      "BTE": "Trace elements in blood \nHg \nMercury",
+      "Codes": "Code \nDefinition \n0 \nvalid measurement \n17 \nquantity of sample insufficient for analysis \n37 \nValue less than LOD"
+    },
+    "comment_codes": {
+      "0": "valid measurement",
+      "17": "quantity of sample insufficient for analysis",
+      "37": "Value less than LOD"
+    }
+  },
+  "1762": {
+    "id": "1762",
+    "project_id": "2017-1762",
+    "population_note": "pregnant mothers",
+    "country": "USA",
+    "city_region": "Cincinnati, OH",
+    "study_name": "Mahabee-Gittens Tobacco Exposure Study",
+    "analyte_names": {
+      "Assessment": "Laboratory at Emory \nU2CES026560",
+      "Codes": "Chemical \nGroup Code \nFull Chemical Group \nName \nCode \nFull Chemical Name \nUSMOKE \nTobacco Metabolites \nCOT \nCotinine (free) \nINFLAM \nInflammatory Markers \nCRP \nC-reactive Protein \nINFLAM \nInflammatory Markers \nIL8 \nInterleukin 8 \nINFLAM \nInflammatory Markers \nIL10 \nInterleukin 10",
+      "CHEAR": "Laboratory methods for measurement of inflammatory marker \nconcentrations",
+      "References": "Page 5 of 5"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "12": "Run out-of-control; insufficient sample for repeat analysis",
+      "17": "Quantity of sample insufficient for analysis",
+      "37": "Value less than LOD",
+      "130": "Value above LOD but below LLOQ",
+      "131": "Value greater than ULOQ",
+      "199": "Value below LLOQ, no LOD provided"
+    }
+  },
+  "1839": {
+    "id": "1839",
+    "project_id": "2017-1839",
+    "pi": "Dr. Cordero",
+    "description": "Urinary phenol/paraben, phthalate, and pesticide concentrations from pregnant mothers during the 1st, 2nd, or 3rd trimester.",
+    "population_note": "pregnant mothers (1st-3rd trimester)",
+    "country": "Puerto Rico/Brazil/Guatemala/Nicaragua",
+    "city_region": "Multi-country",
+    "study_name": "Zika in Infants and Pregnancy (ZIP) Cohort",
+    "analyte_names": {
+      "Hub": "U2CES026561",
+      "CHEAR": "participant",
+      "Urine": "Page 3 of 5",
+      "UDILUTE": "Urinary Dilution Factor \nCRE \nCreatinine",
+      "UPEST": "Dialkyl phosphate pesticide metabolites",
+      "DEDP": "diethyldithiophosphate",
+      "DEP": "diethylphosphate",
+      "DETP": "diethylthiophosphate",
+      "DMDP": "dimethyldithiophosphate",
+      "DMP": "dimethylphosphate",
+      "DMTP": "dimethylthiophosphate",
+      "UPEST2": "Universal pesticide metabolites in urine \nTCP \n3,5,6-trichloro-2-pyridinol",
+      "Codes": "Code \nDefinition \n0 \nValid measurement \n37 \nBelow LOD"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "37": "Below LOD"
+    }
+  },
+  "1863": {
+    "id": "1863",
+    "project_id": "2017-1863",
+    "description": "Smoking metabolites, cellular adhesion molecules, blood lipids, lipid metabolism, nutrients, and inflammatory markers in serum, and urinary oxidative stress markers, thromboxane concentrations and urinary dilution factors from children in the AIRWEIGHS and DIET cohorts.",
+    "population_note": "Children",
+    "country": "USA",
+    "city_region": "Baltimore, MD",
+    "study_name": "AIRWEIGHS and DIET",
+    "analyte_names": {
+      "Hub": "U2CES026533",
+      "CHEAR": "participant",
+      "Cells": "Page 3 of 6",
+      "ADHES": "Cellular adhesion molecules \nPSEL \nP-selectin",
+      "BLIPID": "Lipids in blood \nOXLDL \nOxidized low-density liprotein",
+      "NUTR": "Nutrients \nADIPO \nAdiponectin",
+      "INFLAM": "Cytokines and Other Inflammatory Markers \nTNFA \nTumor necrosis factor A",
+      "LIPMET": "Lipid Metabolism \nLEP \nLeptin",
+      "OXID": "Oxidative Stress Markers \nF2A12I \n8,12-iso-Isoprostane-F2\u03b1-VI",
+      "THROM": "Thromboxane \nDHTHRM \n11-dehyro-thromboxane B2",
+      "UDILUTE": "Urinary Dilution Factor \nCRE \nCreatinine",
+      "USMOKE": "Tobacco Metabolites \nCOT \nCotinine (free)"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "17": "Quantity of sample insufficient for analysis",
+      "37": "Value less than LOD",
+      "130": "Value above LOD but below LOQ",
+      "131": "Value greater than ULOQ",
+      "199": "Value below LOQ, no LOD provided",
+      "210": "Initial concentration higher than the highest standard, insufficient volume for repeat analysis (93, 18)",
+      "211": "Result is below the LOQ (199) and has been imputed to be LOQ/(2^0.5) at client request."
+    }
+  },
+  "1945": {
+    "id": "1945",
+    "project_id": "2017-1945",
+    "pi": "Dr. Breton",
+    "description": "Urinary trace element concentrations from children.",
+    "population_note": "Children",
+    "country": "USA",
+    "city_region": "Los Angeles, CA",
+    "study_name": "MADRES",
+    "analyte_names": {
+      "Teitelbaum": "CHEAR Center for Data Science \nU2CES026555 \nPage 2 of 6",
+      "Resource": "Laboratory Hub \nU2CES026553",
+      "Urine": "Page 4 of 6",
+      "UTE": "Urinary trace elements \nZn \nZinc",
+      "Codes": "Code \nDefinition \n0 \nValid measurement \n37 \nValue less than LOD \n97 \nResult repeated with diluted sample"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "37": "Value less than LOD",
+      "97": "Result repeated with diluted sample"
+    }
+  },
+  "1962": {
+    "id": "1962",
+    "pi": "Dr. Elizabeth Jensen",
+    "description": "Serum SPFAS concentrations from children with diabetes at baseline and follow up visit.",
+    "population_note": "children with diabetes",
+    "country": "USA",
+    "city_region": "Multi-site",
+    "study_name": "SEARCH for Diabetes in Youth",
+    "analyte_names": {
+      "Science": "U2CES026555 \nEmory University \nMiller, Gary W \nNational Exposure Assessment \nLaboratory at Emory \nU2CES026560",
+      "CHEAR": "participant",
+      "Serum": "Page 3 of 5",
+      "SPFAS": "Perfluoroalkyl and \nPolyfluoroalkyl Substances \nPFOS \nPerfluorooctanesulfonic acid",
+      "Codes": "Code \nDefinition \n0 \nValid measurement \n15 \nInterfering substances present \n37 \nValue less than LOD"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "37": "Value less than LOD"
+    }
+  },
+  "1967": {
+    "id": "1967",
+    "project_id": "2017-1967",
+    "description": "Plasma PFAS concentrations from children.",
+    "population_note": "children",
+    "country": "USA",
+    "city_region": "Multi-site",
+    "study_name": "GOALS",
+    "analyte_names": {
+      "Exposure": "Assessment Hub \nU2CES026533",
+      "Plasma": "Page 3 of 4",
+      "SPFAS": "Perfluoroakyl and \nPolyfluoroalkyl Substances \nPFPEA \nPerfluoro-n-pentanoic acid"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "12": "Run out-of-contol; insufficient sample for repeat analysis",
+      "32": "Dilution required",
+      "211": "Result is below the LOQ and has been imputed to be LOQ/(2^0.5) at client request.",
+      "212": "Result is below the LOQ and has been imputed to be LOQ/(2^0.5) at client request."
+    }
+  },
+  "1977": {
+    "id": "1977",
+    "project_id": "2017-1977",
+    "pi": "Dr. Michels",
+    "description": "Urinary phenol/paraben, phthalate, creatinine, polyaromatic hydrocarbon, and metal/trace element concentrations from adolescent girls at 3 pubertal stages (Tanner stage 1, 1 year post-menarche, and Tanner stage 4).",
+    "population_note": "adolescent girls (pubertal stages)",
+    "country": "Chile",
+    "city_region": "Santiago",
+    "study_name": "GOCS (Growth and Obesity Chilean Cohort Study)",
+    "analyte_names": {
+      "Teitelbaum": "CHEAR Center for Data Science \nU2CES026555 \nPage 2 of 7",
+      "Network": "Laboratory Hub \nU2CES026561",
+      "Cells": "Page 4 of 7",
+      "UDILUTE": "Urinary Dilution Factor \nCRE \nCreatinine",
+      "UPAH": "Polycyclic aromatic \nhydrocarbons \nPYR1 \n1-hydroxypyrene",
+      "UPB": "Parabens \nPRPB \nPropyl paraben",
+      "UPHENOL": "Phenols \nTCS \nTriclosan",
+      "UPHTH": "Phthalates \nMNBP \nmono-n-butylphthalate (BzBP, DnBP)",
+      "UTE": "Trace Elements in urine \nZn \nZinc",
+      "Codes": "Code \nDefinition \n0 \nValid measurement \n17 \nQuantity of sample insufficient for analysis \n37 \nValue less than LOD \nPage 6 of 7",
+      "NA": "Page 7 of 7"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "17": "Quantity of sample insufficient for analysis",
+      "37": "Value less than LOD"
+    }
+  },
+  "1982": {
+    "id": "1982",
+    "project_id": "2017-1982",
+    "description": "Urinary flame retardants, phthalates, and specific gravity from children.",
+    "population_note": "Children",
+    "country": "USA",
+    "city_region": "Baltimore, MD",
+    "study_name": "DISCOVER and AIRWEIGHS",
+    "analyte_names": {
+      "Health": "Exposure Analysis Resource Laboratory \nHub \nU2CES026553",
+      "Serum": "Page 3 of 5",
+      "Codes": "Comment Code \nDefinition \n0 \nValid measurement \n17 \nQuantity of sample insufficient for analysis \n37 \nValue less than LOD \n97 \nResult repeated with diluted sample",
+      "UOPFR": "Organophosphorus Flame Retardants \nDPCP \nDi-p-cresylphosphate \nUOPFR \nOrganophosphorus Flame Retardants \nDPHP \nDiphenyl phosphate",
+      "UDILUTE": "Urinary Dilution Factor \nSG \nSpecific Gravity"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "17": "Quantity of sample insufficient for analysis",
+      "37": "Value less than LOD",
+      "97": "Result repeated with diluted sample"
+    }
+  },
+  "2120": {
+    "id": "2120",
+    "project_id": "2018-2120",
+    "pi": "Dr. Mourani",
+    "description": "Urinary creatinine, phthalate, and smoking metabolites, and plasma smoking metabolite concentrations from children during hospital stay",
+    "population_note": "children",
+    "country": "USA",
+    "city_region": "Little Rock, AR",
+    "study_name": "Arkansas Children's Hospital Study",
+    "analyte_names": {
+      "Teitelbaum": "CHEAR Center for Data Science \nU2CES026555 \nPage 2 of 7",
+      "Assessment": "Laboratory at Emory \nU2CES026560",
+      "Urine": "Page 4 of 7",
+      "Phthalates": "UPHTH \nmono-n-butylphthalate (BzBP, DnBP) \nMNBP",
+      "Factor": "UDILUTE \nCreatinine \nCRE",
+      "Codes": "Code \nDefinition \n0 \nValid Measurement \n33 \nResult repeated and confirmed \n37 \nValue less than LOD \n97 \nResult repeated with diluted sample \n115 \nSpecimen analyzed with less than usual dilution \n199 \nValue below LLOQ, no LOD provided \n200 \nValid measurement, results repeated and confirmed (0,33)",
+      "CHEAR": "Mapping file for metabolomics samples to \nparticipant IDs and sample collection year",
+      "NA": "Page 6 of 7",
+      "Link": "CHEAR \nHyperlink to Metabolomics Workbench for \nraw annotated and full feature metabolomic \ndata"
+    },
+    "comment_codes": {
+      "0": "Valid Measurement",
+      "33": "Result repeated and confirmed",
+      "37": "Value less than LOD",
+      "97": "Result repeated with diluted sample",
+      "115": "Specimen analyzed with less than usual dilution",
+      "199": "Value below LLOQ, no LOD provided",
+      "200": "Valid measurement, results repeated and confirmed (0,33)"
+    }
+  },
+  "2121": {
+    "id": "2121",
+    "project_id": "2017-2121",
+    "pi": "Dr. Karr",
+    "description": "Urinary phenol/paraben, phthalate, polycyclic aromatic hydrocarbon (UPAH), pesticide, and creatinine concentrations from children at up to 4 clinic visits, pre- and post-intervention",
+    "population_note": "children",
+    "country": "USA",
+    "city_region": "Washington State, Yakima Valley",
+    "study_name": "Air Cleaner Intervention Study",
+    "analyte_names": {
+      "Teitelbaum": "CHEAR Center for Data Science \nU2CES026555 \nPage 2 of 8",
+      "Assessment": "Laboratory at Emory \nU2CES026560",
+      "Urine": "Page 4 of 8",
+      "Codes": "Chemical \nGroup Code \nFull Chemical Group Name \nCode \nFull Chemical Name",
+      "UDILUTE": "Urinary Dilution Factor \nCRE \nCreatinine",
+      "UPHTH": "Phthalates \nMCINP \nmono-carboxy isononyl phthalate",
+      "UPHENOL": "Phenols \nTCS \nTriclosan",
+      "UPB": "Parabens \nPRPB \nPropyl paraben",
+      "UPAH": "PAHs \nPYR1 \n1-hydroxypyrene",
+      "UPEST": "Alkyl phosphate pesticide metabolites \nDETP \ndiethylthiophosphate",
+      "DMP": "dimethylphosphate",
+      "DEP": "diethylphosphate",
+      "OXID": "Oxidative Stress Markers \nF2A8IP \n8-iso Prostaglandin F2\u03b1",
+      "INFLAM": "Cytokines and Other Inflammatory \nMarkers \nLTE4 \nLeukotriene E4",
+      "CHEAR": "Laboratory methods for measurement of \noxidative stress and inflammatory markers"
+    },
+    "comment_codes": {
+      "0": "Valid Measurement",
+      "17": "Quantity of sample insufficient for analysis",
+      "37": "Value less than LOD",
+      "130": "Value above LOD but below LLOQ"
+    }
+  },
+  "2254": {
+    "id": "2254",
+    "project_id": "2018-2254",
+    "pi": "Dr. Lichtveld",
+    "description": "Trace elements measured in whole blood from pregnant mothers.",
+    "population_note": "pregnant mothers",
+    "country": "Suriname",
+    "city_region": "Paramaribo",
+    "study_name": "CCREOH Birth Cohort",
+    "analyte_names": {
+      "Teitelbaum": "CHEAR Center for Data Science \nU2CES026555 \nPage 2 of 6",
+      "HHEAR": "participant",
+      "BTE": "Trace Elements \nin blood \nSn \nTin"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "18": "Quantity of sample insufficient for repeat",
+      "33": "Result repeated and confirmed",
+      "37": "Value less than LOD",
+      "201": "Below LOD, results repeated and confirmed"
+    }
+  },
+  "2273": {
+    "id": "2273",
+    "project_id": "2018-2273",
+    "pi": "Dr. Goodrich",
+    "description": "Urinary phenol/paraben, phthalate, specific gravity, and trace element and plasma perfluoroalkyl and polyfluoroalkyl substances concentrations from pregnant mothers during their first trimester.",
+    "population_note": "pregnant mothers (1st trimester)",
+    "country": "USA",
+    "city_region": "Michigan",
+    "study_name": "MMIP (Michigan Mother-Infant Pairs)",
+    "analyte_names": {
+      "Teitelbaum": "CHEAR Center for Data Science \nU2CES026555 \nPage 2 of 8",
+      "Health": "U2CES026553",
+      "UDILUTE": "Urinary Dilution Factor \nSG \nSpecific Gravity",
+      "UTE": "Trace Elements in urine \nZn \nZinc",
+      "SPFAS": "Perfluoroalkyl and \nPolyfluoroalkyl Substances \nPFUNDA \nPerfluoroundecanic  acid",
+      "UPHTH": "Phthalates \nMNBP \nmono-n-butylphthalate (BzBP, DnBP)",
+      "UPHENOL": "Phenols \nTCS \nTriclosan",
+      "UPB": "Parabens \nPRPB \nPropyl paraben",
+      "Codes": "Code \nDefinition \n0 \nValid measurement \n17 \nQuantity of sample insufficient for analysis \n37 \nValue less than LOD \n97 \nResult repeated with diluted sample"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "17": "Quantity of sample insufficient for analysis",
+      "37": "Value less than LOD",
+      "97": "Result repeated with diluted sample"
+    }
+  },
+  "2512": {
+    "id": "2512",
+    "project_id": "2018-2512",
+    "pi": "Dr. Quir\u00f3s-Alcal\u00e1",
+    "description": "Urinary pesticides and phthalates from children.",
+    "population_note": "Children",
+    "country": "USA",
+    "city_region": "Baltimore, MD",
+    "study_name": "JHU Environmental Exposures Study",
+    "analyte_names": {
+      "Analysis": "Resource Laboratory Hub \nU2CES026553 \nPage 2 of 6",
+      "CHEAR": "participant",
+      "Cells": "Page 3 of 6",
+      "UPEST2": "Universal pesticide metabolites in urine \nT245 \n2,4,5-Trichlorophenoxyacetic acid",
+      "UPHTH": "Phthalates \nMNBP \nmono-n-butylphthalate (BzBP, DnBP)",
+      "Codes": "Code \nDefinition \n0 \nValid measurement \n37 \nValue less than LOD \n97 \nResult repeated with diluted sample"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "37": "Value less than LOD",
+      "97": "Result repeated with diluted sample"
+    }
+  },
+  "2532": {
+    "id": "2532",
+    "project_id": "2018-2532",
+    "population_note": "unknown",
+    "country": "USA",
+    "city_region": "Multi-site: Boston/San Diego/St. Louis",
+    "study_name": "VDAART (Vitamin D Antenatal Asthma Reduction Trial)",
+    "comment_codes": {
+      "0": "Valid measurement",
+      "37": "Value less than LOD"
+    }
+  },
+  "2537": {
+    "id": "2537",
+    "project_id": "2018-2537",
+    "pi": "Dr. Hunt",
+    "description": "Urinary phthalate and specific gravity concentrations from children https://doi.org/10.36043 /2537_288 2537_UPHTH_METHODS.docx CHEAR Laboratory methods for measurement of urinary phthalate concentrations.",
+    "population_note": "Children",
+    "country": "USA",
+    "city_region": "Charleston, SC",
+    "study_name": "MUSC Children's Study",
+    "analyte_names": {
+      "Analysis": "Resource Laboratory Hub \nU2CES026553 \nPage 2 of 5",
+      "Urine": "Page 3 of 5",
+      "UPHTH": "Phthalates \nMNBP \nmono-n-butylphthalate",
+      "UDILUTE": "Urinary Dilution \nFactor \nSG \nSpecific gravity \nNA",
+      "Codes": "Code \nDefinition \n0 \nValid measurement \n37 \nValue less than LOD \n97 \nResult repeated with dilute sample"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "37": "Value less than LOD",
+      "97": "Result repeated with dilute sample"
+    }
+  },
+  "2539": {
+    "id": "2539",
+    "project_id": "2018-2539",
+    "pi": "Dr. Romano",
+    "description": "SPFAS concentrations in breast milk at 6 weeks post-partum.",
+    "population_note": "mothers (breast milk, 6 weeks post-partum)",
+    "country": "USA",
+    "city_region": "New Hampshire",
+    "study_name": "NHBCS (New Hampshire Birth Cohort Study — Breast Milk PFAS)",
+    "analyte_names": {
+      "Teitelbaum": "CHEAR Center for Data Science \nU2CES026555 \nPage 2 of 6",
+      "Exposure": "Assessment Hub \nU2CES026533",
+      "Milk": "Page 4 of 6",
+      "SPFAS": "Perfluoroalkyl and Polyfluoroalkyl \nSubstances \nPFUNDA \nPerfluoroundecanic acid"
+    },
+    "comment_codes": {
+      "0": "Valid measurement",
+      "211": "Result is below the LOQ and has been imputed"
+    }
+  },
+  "3131": {
+    "id": "3131",
+    "project_id": "2020-3131",
+    "pi": "Dr. Kestutis Bendinskas",
+    "description": "Urinary trace elements, plasma PFAS and brominated flame retardants from children in the Syracuse Lead Study.",
+    "population_note": "children (Syracuse Lead Study)",
+    "country": "USA",
+    "city_region": "Syracuse, NY",
+    "study_name": "Syracuse Lead Study",
+    "comment_codes": {
+      "0": "Valid measurement",
+      "17": "Quantity of sample insufficient for analysis",
+      "33": "Result repeated and confirmed",
+      "37": "Value less than LOD",
+      "230": "Samples run with less than standard volume, valid",
+      "231": "Samples run with less than standard volume, below LOD"
+    }
+  },
+  "34": {
+    "id": "34",
+    "project_id": "2016-34",
+    "pi": "Dr. David Christiani",
+    "description": "Metals and creatinine in urine samples with metabolomics in serum.",
+    "population_note": "adults",
+    "country": "Bangladesh",
+    "city_region": "Dhaka region",
+    "study_name": "Harvard Bangladesh Arsenic/Metals Birth Cohort",
+    "comment_codes": {
+      "0": "Valid measurement",
+      "37": "Value less than LOD",
+      "97": "Result repeated with diluted sample"
+    }
+  }
+}

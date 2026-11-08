@@ -1,0 +1,142 @@
+{
+  "00496": {
+    "age": { "column": "age", "unit": "years" },
+    "sex": { "column": "sex" },
+    "bmi": { "column": "bmi" }
+  },
+  "00605": {
+    "age": { "column": "age", "unit": "years" },
+    "sex": { "column": "sex" },
+    "bmi": { "column": "bmi_1" }
+  },
+  "00606": {
+    "age": { "column": "age", "unit": "years" },
+    "sex": { "column": "sex" },
+    "bmi": { "column": "bmi" }
+  },
+  "00652": {
+    "sex": { "column": "sex" }
+  },
+  "00862": {
+    "sex": { "column": "sexo_h00" }
+  },
+  "01103": {
+    "age": { "column": "age", "unit": "years" },
+    "sex": { "column": "sex" },
+    "bmi": { "column": "bmi" }
+  },
+  "1407": {
+    "age": { "column": "age", "unit": "years" },
+    "sex": { "column": "gender_form03" },
+    "bmi": { "column": "bmi" }
+  },
+  "1431": {
+    "age": { "column": "age_m", "unit": "years", "transform": "age_m" }
+  },
+  "1432": {
+    "age": { "column": "age", "unit": "years" },
+    "sex": { "column": "sex" }
+  },
+  "1438": {
+    "sex": { "column": "coi_gender" }
+  },
+  "1448": {
+    "bmi": { "column": "bmi" }
+  },
+  "1449": {
+    "sex": { "column": "coi_gender" }
+  },
+  "1450": {
+    "bmi": { "column": "vital_bmi_visit1" }
+  },
+  "1461": {
+    "age": { "column": "mslchronage", "unit": "months", "transform": "mslchronage / 12" },
+    "sex": { "column": "correctsex" }
+  },
+  "1523": {
+    "age": { "column": "enrollage", "unit": "years" },
+    "sex": { "column": "sex" }
+  },
+  "1534": {
+  },
+  "1593": {
+    "age": { "column": "age", "unit": "years" },
+    "sex": { "column": "sex" }
+  },
+  "1598": {
+    "sex": { "column": "sex" }
+  },
+  "1599": {
+  },
+  "1729": {
+    "age": { "column": "age", "unit": "years" }
+  },
+  "1740": {
+    "age": { "column": "age_mom_enroll_d", "unit": "years" }
+  },
+  "1762": {
+    "age": { "column": "age", "unit": "years" },
+    "sex": { "column": "sex" }
+  },
+  "1839": {
+    "age": { "column": "scr_ob_age", "unit": "years" }
+  },
+  "1863": {
+    "age": { "column": "tsage", "unit": "years" },
+    "sex": { "column": "tsgender" }
+  },
+  "1945": {
+    "age": { "column": "t1_mat_age", "unit": "years" },
+    "sex": { "column": "gender" }
+  },
+  "1962": {
+    "age": { "column": "age_dx", "unit": "years" },
+    "sex": { "column": "gender" }
+  },
+  "1967": {
+  },
+  "1977": {
+    "age": { "column": "age_b1", "unit": "years" },
+    "sex": { "column": "sex" }
+  },
+  "1982": {
+    "age": { "column": "tsage", "unit": "years" },
+    "sex": { "column": "tsgender" }
+  },
+  "2120": {
+    "age": { "column": "ageintubation", "unit": "years" }
+  },
+  "2121": {
+    "age": { "column": "age.1", "unit": "years" },
+    "bmi": { "column": "bmipct.1" }
+  },
+  "2254": {
+  },
+  "2273": {
+  },
+  "2512": {
+    "bmi": { "column": "bmi_0" }
+  },
+  "2532": {
+    "age": { "column": "age_at_collection_days", "unit": "days", "transform": "age_at_collection_days / 365.25" },
+    "sex": { "column": "cgender" }
+  },
+  "2537": {
+    "age": { "column": "child_age", "unit": "years" },
+    "sex": { "column": "child_gender" }
+  },
+  "2539": {
+    "age": { "column": "enrollment_age", "unit": "years" },
+    "bmi": { "column": "maternalbmi" }
+  },
+  "3131": {
+    "age": { "column": "childage_vis1", "unit": "years" },
+    "sex": { "column": "gender" },
+    "bmi": { "column": "bmi_vis1" }
+  },
+  "34": {
+    "age": { "column": "age", "unit": "years" },
+    "sex": { "column": "gender" },
+    "bmi": { "column": "bmi" }
+  }
+}

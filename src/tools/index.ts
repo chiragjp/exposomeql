@@ -131,6 +131,7 @@ import {
   generateDataOriginNote,
 } from "../codegen/r-code-generator.js";
 import { NHANES_HHEAR_BRIDGE, BRIDGE_BY_HHEAR, BRIDGE_BY_NHANES } from "../variables/nhanes-hhear-bridge.js";
+import { registerExposomeAtlasTools } from "./exposomeatlas.js";
 import { resolveChemical, COMPTOX_BY_HHEAR, THRESHOLDS_BY_NHANES_VAR } from "../variables/comptox-chemicals.js";
 import { resolveChemicalForCTD, CTD_BY_NHANES, CTD_BY_CATEGORY, CTD_BY_MESH, CTD_CHEMICAL_MAP, type CTDChemicalMapping } from "../variables/ctd-chemical-map.js";
 
@@ -7894,8 +7895,9 @@ disconnect_pewas_data(con)
   registerExposomeGlobe(server, ctx);
   registerStratifiedExwas(server, ctx);
   registerScatter(server, ctx);
+  registerExposomeAtlasTools(server, ctx);
 
-  console.error(`[exposomeql] Registered 74 tools (6 Descriptive, 5 Bivariate, 6 EP-WAS, 8 Regression, 1 Reference Interval, 2 Mortality, 9 HHEAR, 8 Chemical/CTD, 4 Cross-cutting, 5 Nutrient, 5 Diagnostics, 2 Correlation, 2 Evidence, 1 Personal, 2 Diet, 3 Sensitivity/N-of-1, 2 Validation, 4 Derived Phenotypes (incl. recipe_catalog), 1 Variance Decomposition, 1 Exposome Globe, 1 Stratified ExWAS, 1 Scatter)`);
+  console.error(`[exposomeql] Registered 77 tools (6 Descriptive, 5 Bivariate, 6 EP-WAS, 8 Regression, 1 Reference Interval, 2 Mortality, 9 HHEAR, 8 Chemical/CTD, 4 Cross-cutting, 5 Nutrient, 5 Diagnostics, 2 Correlation, 2 Evidence, 1 Personal, 2 Diet, 3 Sensitivity/N-of-1, 2 Validation, 4 Derived Phenotypes (incl. recipe_catalog), 1 Variance Decomposition, 1 Exposome Globe, 1 Stratified ExWAS, 1 Scatter, 3 ExposomeAtlas literature)`);
 }
 
 const PHENOTYPE_RECIPES = [

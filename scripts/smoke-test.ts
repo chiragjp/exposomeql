@@ -169,6 +169,30 @@ async function main() {
       });
     }
 
+    // ── ExposomeAtlas literature evidence (only when `npm run atlas-etl` has been run) ──
+    if (fs.existsSync(path.join("data", "exposomeatlas", "parquet", "atlas_associations.parquet"))) {
+      const tA = Date.now();
+      try {
+        const res = await client.callTool({
+          name: "atlas_pair_evidence",
+          arguments: { exposure: "lead", phenotype: "blood pressure" },
+        });
+        const data = JSON.parse((res.content as Array<{ text: string }>)[0]?.text ?? "{}");
+        const p = data.pairs?.[0];
+        const ok = !!p && Number(p.n_records) > 0 && Array.isArray(p.records) && p.records.every((r: { evidence_source: string }) => r.evidence_source === "literature")
+          // all 8 lead→SBP cohorts come from one paper: must not be labelled replicated
+          && (Number(p.n_papers) >= 2 || String(p.replication).startsWith("single"));
+        results.push({
+          name: `ExposomeAtlas pair evidence (lead → blood pressure): ${p ? `${p.n_records} records, ${p.replication}` : "none"}`,
+          passed: ok,
+          duration_ms: Date.now() - tA,
+          error: ok ? undefined : `Unexpected result: ${JSON.stringify(data).slice(0, 200)}`,
+        });
+      } catch (err) {
+        results.push({ name: "ExposomeAtlas pair evidence", passed: false, duration_ms: Date.now() - tA, error: (err as Error).message });
+      }
+    }
+
     // ── Derived phenotypes: eGFR built-in + custom expression + list ──
     const t7 = Date.now();
     try {
