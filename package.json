@@ -26,6 +26,7 @@
     "convert-data": "tsx scripts/convert-to-parquet.ts",
     "ctd-etl": "tsx scripts/ctd-etl.ts",
     "atlas-etl": "tsx scripts/exposomeatlas-etl.ts",
+    "heap-etl": "tsx scripts/heap-etl.ts",
     "eval:run": "tsx eval/run.ts",
     "eval:score": "tsx eval/score.ts",
     "eval:report": "tsx eval/report.ts"

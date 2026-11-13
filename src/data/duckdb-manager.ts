@@ -82,6 +82,36 @@ export class DuckDBManager {
 
     // Register ExposomeAtlas (literature-curated evidence) Parquet files if available
     await this.registerExposomeAtlasParquet();
+
+    // Register HEAP (UK Biobank exposome–proteome–disease graph) Parquet files if available
+    await this.registerHeapParquet();
+  }
+
+  /**
+   * Register HEAP tables (built by scripts/heap-etl.ts) as views: heap_ep, heap_mediation,
+   * heap_mr_edges, heap_mr_triads, heap_pes_disease, heap_intervention, heap_diseases,
+   * heap_manifest. Directory: <dataDir>/heap/parquet.
+   */
+  private async registerHeapParquet(): Promise<void> {
+    const dir = path.join(this.config.dataDir, "heap", "parquet");
+    if (!fs.existsSync(dir)) return;
+    let registered = 0;
+    for (const view of ["heap_ep", "heap_mediation", "heap_mr_edges", "heap_mr_triads", "heap_pes_disease", "heap_intervention", "heap_diseases"]) {
+      const filePath = path.join(dir, `${view}.parquet`);
+      if (fs.existsSync(filePath)) {
+        await this.exec(
+          `CREATE OR REPLACE VIEW ${view} AS SELECT * FROM read_parquet('${filePath.replace(/'/g, "''")}')`
+        );
+        registered++;
+      }
+    }
+    const manifestPath = path.join(dir, "manifest.json");
+    if (fs.existsSync(manifestPath)) {
+      await this.exec(
+        `CREATE OR REPLACE VIEW heap_manifest AS SELECT * FROM read_json_auto('${manifestPath.replace(/'/g, "''")}')`
+      );
+    }
+    if (registered > 0) console.error(`[duckdb] Registered ${registered} HEAP parquet views`);
   }
 
   /**

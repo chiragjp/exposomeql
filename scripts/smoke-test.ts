@@ -193,6 +193,40 @@ async function main() {
       }
     }
 
+    // ── HEAP exposome–proteome–disease graph (only when `npm run heap-etl` has been run) ──
+    if (fs.existsSync(path.join("data", "heap", "parquet", "heap_ep.parquet"))) {
+      const heapCalls: Array<[string, string, Record<string, unknown>, (d: any) => boolean]> = [
+        ["HEAP E→P (pack years → proteins)", "heap_exposure_proteins", { exposure: "pack years" },
+          (d) => d.records?.length > 0 && d.records.every((r: { replicated: boolean }) => r.replicated)
+            && d.records.every((r: object) => "mr_supported" in r) && d.summary.n_mr_supported > 0],
+        ["HEAP E→P (MR supported only)", "heap_exposure_proteins", { exposure: "pack years", mr_supported_only: true },
+          (d) => d.records?.length > 0 && d.records.every((r: { mr_supported: boolean }) => r.mr_supported === true)],
+        ["HEAP P→D (GDF15 × heart failure)", "heap_protein_disease", { protein: "GDF15", disease: "heart failure" },
+          (d) => d.observational?.length > 0],
+        ["HEAP triads (mediator motif)", "heap_triads", { motif: "A" },
+          (d) => d.n_triads > 0 && d.triads.every((r: { motif_code: string }) => r.motif_code === "A")],
+        ["HEAP E→D (smoking status PES)", "heap_exposure_disease", { exposure: "smoking_status" },
+          (d) => d.pes_disease?.length > 0],
+        ["HEAP ↔ NHANES bridge (LBXCOT)", "heap_nhanes_bridge", { query: "LBXCOT" },
+          (d) => d.results?.[0]?.heap_ukb?.top_proteins?.length > 0 && d.results[0].nhanes_epwas.top_phenotype_associations.length > 0],
+      ];
+      for (const [label, name, args, check] of heapCalls) {
+        const tH = Date.now();
+        try {
+          const res = await client.callTool({ name, arguments: args });
+          const data = JSON.parse((res.content as Array<{ text: string }>)[0]?.text ?? "{}");
+          // every HEAP response must carry the citation + license block
+          const ok = check(data) && typeof data.citation?.cite === "string" && /BY-NC-ND/.test(data.citation?.license ?? "");
+          results.push({
+            name: label, passed: ok, duration_ms: Date.now() - tH,
+            error: ok ? undefined : `Unexpected result: ${JSON.stringify(data).slice(0, 300)}`,
+          });
+        } catch (err) {
+          results.push({ name: label, passed: false, duration_ms: Date.now() - tH, error: (err as Error).message });
+        }
+      }
+    }
+
     // ── Derived phenotypes: eGFR built-in + custom expression + list ──
     const t7 = Date.now();
     try {
