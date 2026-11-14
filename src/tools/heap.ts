@@ -23,7 +23,9 @@ const NOT_LOADED =
   "HEAP data is not loaded. Build it with `npm run heap-etl` (downloads the HEAP supplementary tables from heap.bio into <dataDir>/heap/parquet) and restart the server.";
 
 const HEAP_CITATION =
-  "Isaac SK, Ellis RJ, Gusev A, Murthy VL, Udler MS, Patel CJ. Human Plasma Proteomics Links Modifiable Lifestyle Exposome to Disease Risk. medRxiv, 2025. https://doi.org/10.1101/2025.05.07.25327178";
+  "Isaac SK, Ellis RJ, Jee YH, Murthy VL, Udler MS, Neale B, Sunyaev S, Gusev A, Martin A, Patel CJ. Human Plasma Proteomics Links Modifiable Lifestyle Exposome to Disease Risk. medRxiv, 2026 (version 2, posted 2026-11-13). https://doi.org/10.1101/2025.05.07.25327178";
+
+const HEAP_URL = "https://www.medrxiv.org/content/10.1101/2025.05.07.25327178v2";
 
 const SPEC = z.enum(["base", "base_plus_bmi", "base_plus_clinical", "base_plus_blood_draw", "exclude_prevalent_disease"])
   .optional().default("base")
@@ -68,7 +70,9 @@ async function citation(ctx: AppContext): Promise<Record<string, unknown>> {
   return {
     dataset: "HEAP — Human Exposomic Architecture of the Proteome",
     homepage: "https://heap.bio/",
-    cite: m.citation ?? HEAP_CITATION,
+    // code is the source of truth, so a manifest built before a preprint revision cannot serve a stale citation
+    cite: HEAP_CITATION,
+    url: HEAP_URL,
     license: m.license ?? "CC BY-NC-ND 4.0 (https://creativecommons.org/licenses/by-nc-nd/4.0/)",
     license_note: m.license_note ??
       "Redistributed and harmonized in ExposomeQL with permission of the HEAP authors. Non-commercial use; cite the HEAP preprint when reporting these results.",

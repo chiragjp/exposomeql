@@ -208,8 +208,9 @@ async function main() {
     source: BUCKET,
     version: webVersion,
     citation:
-      "Isaac SK, Ellis RJ, Gusev A, Murthy VL, Udler MS, Patel CJ. Human Plasma Proteomics Links Modifiable Lifestyle Exposome to Disease Risk. medRxiv, 2025. https://doi.org/10.1101/2025.05.07.25327178",
+      "Isaac SK, Ellis RJ, Jee YH, Murthy VL, Udler MS, Neale B, Sunyaev S, Gusev A, Martin A, Patel CJ. Human Plasma Proteomics Links Modifiable Lifestyle Exposome to Disease Risk. medRxiv, 2026 (version 2, posted 2026-11-13). https://doi.org/10.1101/2025.05.07.25327178",
     doi: "10.1101/2025.05.07.25327178",
+    url: "https://www.medrxiv.org/content/10.1101/2025.05.07.25327178v2",
     license: "CC BY-NC-ND 4.0 (https://creativecommons.org/licenses/by-nc-nd/4.0/)",
     license_note:
       "Redistributed and harmonized in ExposomeQL with permission of the HEAP authors. Non-commercial use; cite the HEAP preprint when reporting these results.",
